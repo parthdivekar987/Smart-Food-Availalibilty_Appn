@@ -1,0 +1,264 @@
+
+// =========================
+// Prisma configuration
+// =========================
+generator client {
+  provider      = "prisma-client-js"
+  // Thêm các target để Prisma tải đủ các file binary cần thiết
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+//
+// =========================
+// ENUMS
+// =========================
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  WAITER
+  KITCHEN
+  CUSTOMER
+}
+
+enum MenuItemStatus {
+  AVAILABLE
+  UNAVAILABLE
+  SOLD_OUT
+}
+
+enum TableSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum OrderStatus {
+  RECEIVED
+  PREPARING
+  READY
+  SERVED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum PaymentMethod {
+  CASH
+  STRIPE
+  VNPAY
+  MOMO
+  ZALOPAY
+}
+
+//
+// =========================
+// USER & AUTH
+// =========================
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  password   String
+  fullName   String
+  avatarUrl  String?
+  role       Role
+  isActive   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  refreshToken         String?   // Lưu Refresh Token
+  isVerified           Boolean   @default(false) // Đã xác thực email chưa?
+  verificationToken    String?   // Token gửi qua email để active
+  forgotPasswordToken  String?   // Token dùng để reset pass
+
+  assignedTables Table[]
+  tableSessions  TableSession[]
+  orders     Order[]
+  reviews    Review[]
+}
+
+//
+// =========================
+// RESTAURANT & TABLE
+// =========================
+model Restaurant {
+  id        String   @id @default(uuid())
+  name      String
+  address   String
+  createdAt DateTime @default(now())
+
+  tables    Table[]
+  categories Category[]
+}
+
+model Table {
+  id           String   @id @default(uuid())
+  restaurantId String
+  name         String
+  capacity     Int
+  isActive     Boolean  @default(true)
+  waiterId     String?
+  qrSecret     String?  // Secret for signing QR tokens
+  qrVersion    Int      @default(1) // Version to invalidate old QR codes
+
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  waiter       User?      @relation(fields: [waiterId], references: [id])
+  sessions     TableSession[]
+}
+
+model TableSession {
+  id        String   @id @default(uuid())
+  tableId   String
+  waiterId  String?
+  status    TableSessionStatus @default(OPEN)
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+
+  table     Table @relation(fields: [tableId], references: [id])
+  waiter    User? @relation(fields: [waiterId], references: [id])
+  order     Order?
+}
+
+//
+// =========================
+// MENU
+// =========================
+model Category {
+  id           String   @id @default(uuid())
+  restaurantId String
+  name         String
+
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  menuItems    MenuItem[]
+}
+
+model MenuItem {
+  id                  String   @id @default(uuid())
+  categoryId           String
+  name                 String
+  description          String?
+  price                Float
+  prepTime             Int     @default(15) // Preparation time in minutes
+  status               MenuItemStatus @default(AVAILABLE)
+  isChefRecommended    Boolean @default(false)
+  createdAt            DateTime @default(now())
+
+  category              Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  modifierGroups        ModifierGroup[]
+  orderItems            OrderItem[]
+  photos                MenuItemPhoto[]
+  reviews               Review[]
+}
+
+model ModifierGroup {
+  id         String   @id @default(uuid())
+  menuItemId String
+  name       String
+  required   Boolean @default(false)
+
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  options    ModifierOption[]
+}
+
+model ModifierOption {
+  id              String   @id @default(uuid())
+  modifierGroupId String
+  name            String
+  priceDelta      Float    @default(0)
+
+  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  orderItemLinks  OrderItemModifier[]
+}
+
+model MenuItemPhoto {
+  id         String   @id @default(uuid())
+  menuItemId String
+  url        String   // Đường dẫn ảnh (VD: /uploads/abc.jpg)
+  isPrimary  Boolean  @default(false) // Ảnh đại diện chính
+  createdAt  DateTime @default(now())
+
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  menuItemId String
+  userId     String?
+  rating     Int      @default(5)
+  comment    String?
+  customerName String? // Cho trường hợp khách vãng lai không login nhưng muốn để lại tên
+  createdAt  DateTime @default(now())
+
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id])
+}
+
+//
+// =========================
+// ORDER
+// =========================
+model Order {
+  id              String   @id @default(uuid())
+  tableSessionId  String   @unique
+  userId          String?
+  status          OrderStatus @default(RECEIVED)
+  totalAmount     Float    @default(0)
+  createdAt       DateTime @default(now())
+
+  tableSession    TableSession @relation(fields: [tableSessionId], references: [id])
+  user            User? @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  payment         Payment?
+  
+  billRequested   Boolean @default(false)
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String
+  menuItemId String
+  quantity   Int
+  price      Float
+  note       String?
+  status     OrderStatus @default(RECEIVED)
+
+  order      Order @relation(fields: [orderId], references: [id])
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  modifiers  OrderItemModifier[]
+}
+
+model OrderItemModifier {
+  id               String   @id @default(uuid())
+  orderItemId      String
+  modifierOptionId String
+
+  orderItem        OrderItem @relation(fields: [orderItemId], references: [id])
+  modifierOption   ModifierOption @relation(fields: [modifierOptionId], references: [id])
+}
+
+//
+// =========================
+// PAYMENT
+// =========================
+model Payment {
+  id             String   @id @default(uuid())
+  orderId        String   @unique
+  method         PaymentMethod
+  status         PaymentStatus @default(PENDING)
+  amount         Float
+  discountAmount Float    @default(0)
+  discountType   String?  // 'PERCENTAGE' or 'FIXED'
+  finalAmount    Float?
+  paidAt         DateTime?
+
+  order     Order @relation(fields: [orderId], references: [id])
+}

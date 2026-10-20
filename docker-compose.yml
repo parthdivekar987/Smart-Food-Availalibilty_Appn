@@ -1,0 +1,63 @@
+
+services:
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: restaurant
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    restart: always
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    command: sh -c "npx prisma generate && npx prisma migrate deploy && npm run dev"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql://user:password@postgres:5432/restaurant
+      - REDIS_URL=redis://redis:6379
+      - SESSION_SECRET=your-session-secret-here
+      - JWT_SECRET=your-jwt-secret-here
+      - REFRESH_SECRET_KEY=your-refresh-secret-key-here
+      - GOOGLE_CLIENT_ID=your-google-client-id-here
+      - GOOGLE_CLIENT_SECRET=your-google-client-secret-here
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=your-smtp-email-here
+      - SMTP_PASS=your-smtp-password-here
+      - FRONTEND_URL=http://localhost:5173
+    depends_on:
+      - postgres
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:4000/api/v1
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

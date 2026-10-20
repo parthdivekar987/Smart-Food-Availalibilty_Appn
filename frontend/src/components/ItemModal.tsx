@@ -1,0 +1,387 @@
+import { useState, useEffect } from 'react';
+import { MenuItem, ModifierOption } from '../types';
+import { useCartStore } from '../store/useCartStore';
+import { useSessionStore } from '../store/useSessionStore';
+import { Star, MessageSquarePlus, ChevronDown, Box, Sparkles, Image as ImageIcon } from 'lucide-react';
+import { guestApi } from '../api/guestApi';
+import { toast } from 'react-hot-toast';
+import Dish3DViewer from './3d/Dish3DViewer';
+
+interface Props {
+  item: MenuItem;
+  relatedItems?: MenuItem[];
+  onSelectRelated?: (item: MenuItem) => void;
+  onClose: () => void;
+  initial3D?: boolean;
+}
+
+export default function ItemModal({ item, relatedItems = [], onSelectRelated, onClose, initial3D = true }: Props) {
+  const [selectedModifiers, setSelectedModifiers] = useState<{ [key: string]: ModifierOption[] }>({});
+  const [quantity, setQuantity] = useState(1);
+  const [viewMode, setViewMode] = useState<'2D' | '3D'>(initial3D ? '3D' : '2D');
+  const addToCart = useCartStore(state => state.addToCart);
+  const sessionId = useSessionStore(state => state.sessionId);
+
+  // Review States
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewPage, setReviewPage] = useState(1);
+  const [hasMoreReviews, setHasMoreReviews] = useState(false);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+
+  // Submit Review States
+  const [newRating, setNewRating] = useState(5);
+  const [newComment, setNewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+
+  const isLoggedIn = !!localStorage.getItem('authToken') || !!localStorage.getItem('accessToken');
+
+  // Reset state when item changes (for related items navigation)
+  useEffect(() => {
+    setSelectedModifiers({});
+    setQuantity(1);
+    setReviews([]);
+    setReviewPage(1);
+    fetchReviews(1);
+  }, [item.id]);
+
+  const fetchReviews = async (page: number) => {
+    setLoadingReviews(true);
+    try {
+      const res: any = await guestApi.getReviews(item.id, { page, limit: 5 });
+      setReviews(prev => page === 1 ? res.data : [...prev, ...res.data]);
+      setHasMoreReviews(res.hasMore);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  const handleLoadMoreReviews = () => {
+    const nextPage = reviewPage + 1;
+    setReviewPage(nextPage);
+    fetchReviews(nextPage);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!newComment.trim()) {
+      toast.error("Please enter your review");
+      return;
+    }
+
+    if (!sessionId) {
+      toast.error("Session not found. Please scan QR code again.");
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      await guestApi.createReview(item.id, {
+        rating: newRating,
+        comment: newComment,
+        customerName: !isLoggedIn ? "Guest" : undefined,
+        tableSessionId: sessionId
+      });
+      toast.success("Thank you for your review!");
+      setNewComment('');
+      setShowReviewForm(false);
+      fetchReviews(1); // Refresh
+    } catch (error: any) {
+      const message = error.response?.data?.error || "Failed to submit review";
+      toast.error(message);
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const handleOptionChange = (groupId: string, option: ModifierOption, isRequired: boolean) => {
+    setSelectedModifiers(prev => {
+      const currentOptions = prev[groupId] || [];
+      // Single Select for required groups
+      if (isRequired) {
+        return { ...prev, [groupId]: [option] };
+      }
+      // Multi-select (Add or remove)
+      const exists = currentOptions.find(o => o.id === option.id);
+      if (exists) {
+        return { ...prev, [groupId]: currentOptions.filter(o => o.id !== option.id) };
+      }
+      return { ...prev, [groupId]: [...currentOptions, option] };
+    });
+  };
+
+  const handleConfirm = () => {
+    // Check required groups are selected
+    for (const group of item.modifierGroups) {
+      if (group.required && (!selectedModifiers[group.id] || selectedModifiers[group.id].length === 0)) {
+        alert(`Please select ${group.name}`);
+        return;
+      }
+    }
+    addToCart(item, quantity, selectedModifiers);
+    onClose();
+  };
+
+  const isAvailable = item.status === 'AVAILABLE';
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl max-w-md w-full p-0 flex flex-col max-h-[90vh] shadow-2xl overflow-hidden">
+
+        {/* Header Image & 3D Viewer & Close */}
+        <div className="relative w-full h-56 bg-gray-900 flex-shrink-0 overflow-hidden">
+          {viewMode === '3D' ? (
+            <div className="w-full h-full relative">
+              <Dish3DViewer item={item} inline={true} />
+            </div>
+          ) : (
+            item.photos && item.photos.length > 0 ? (
+              <img
+                src={item.photos.find(p => p.isPrimary)?.url || item.photos[0].url}
+                className={`w-full h-full object-cover ${!isAvailable ? 'grayscale opacity-80' : ''}`}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-400">No Image</div>
+            )
+          )}
+
+          {/* 3D / 2D Toggle Button */}
+          <button
+            onClick={() => setViewMode(viewMode === '2D' ? '3D' : '2D')}
+            className="absolute bottom-3 right-3 px-3 py-1.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 backdrop-blur-md text-white rounded-xl text-xs font-black shadow-lg flex items-center gap-1.5 transition-all active:scale-95 z-20 border border-orange-400/30"
+          >
+            {viewMode === '2D' ? (
+              <>
+                <Box size={14} className="animate-bounce" />
+                <span>Inspect in 3D</span>
+              </>
+            ) : (
+              <>
+                <ImageIcon size={14} />
+                <span>View Photo</span>
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 bg-black/60 p-2 rounded-full backdrop-blur-sm text-white hover:bg-black/90 z-20 transition-all active:scale-90"
+          >
+            ✕
+          </button>
+
+          {!isAvailable && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10 pointer-events-none">
+              <span className="bg-red-600 text-white font-bold px-4 py-2 rounded-lg text-lg transform -rotate-6 border-2 border-white shadow-lg">
+                {item.status === 'SOLD_OUT' ? 'SOLD OUT' : 'UNAVAILABLE'}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-5 pb-24">
+          <div className="flex justify-between items-start mb-2">
+            <h2 className="text-2xl font-black text-gray-800 leading-tight">{item.name}</h2>
+            <span className="text-xl font-bold text-orange-600 shrink-0 ml-4">{item.price.toLocaleString('vi-VN')}đ</span>
+          </div>
+          <p className="text-gray-500 mb-6 text-sm leading-relaxed">{item.description}</p>
+
+          {/* Options */}
+          {isAvailable && item.modifierGroups.map(group => (
+            <div key={group.id} className="mb-6">
+              <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase tracking-wide">
+                {group.name} {group.required && <span className="text-red-500">*</span>}
+              </h3>
+              <div className="space-y-2">
+                {group.options.map(opt => (
+                  <label key={opt.id} className={`flex justify-between items-center p-3 border rounded-xl cursor-pointer transition-all ${(selectedModifiers[group.id]?.find(o => o.id === opt.id))
+                    ? 'bg-orange-50 border-orange-500 ring-1 ring-orange-500'
+                    : 'border-gray-200 hover:bg-gray-50'
+                    }`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${(selectedModifiers[group.id]?.find(o => o.id === opt.id))
+                        ? 'border-orange-500 bg-orange-500'
+                        : 'border-gray-300'
+                        }`}>
+                        {(selectedModifiers[group.id]?.find(o => o.id === opt.id)) && (
+                          <div className="w-2 h-2 bg-white rounded-full" />
+                        )}
+                      </div>
+                      <input
+                        type={group.required ? "radio" : "checkbox"}
+                        name={group.id}
+                        className="hidden"
+                        checked={!!selectedModifiers[group.id]?.find(o => o.id === opt.id)}
+                        onChange={() => handleOptionChange(group.id, opt, group.required)}
+                      />
+                      <span className="font-medium text-gray-700">{opt.name}</span>
+                    </div>
+                    {opt.priceDelta > 0 && (
+                      <span className="text-gray-500 font-medium text-sm">+{opt.priceDelta.toLocaleString('vi-VN')}đ</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Related Items Section */}
+          {relatedItems.length > 0 && (
+            <div className="mt-8 border-t border-gray-100 pt-6">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <span>🍽️</span> You might also like
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                {relatedItems.map(r => (
+                  <div
+                    key={r.id}
+                    onClick={() => onSelectRelated && onSelectRelated(r)}
+                    className="flex flex-col gap-2 p-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 cursor-pointer border border-gray-100 transition-colors"
+                  >
+                    <div className="aspect-video w-full bg-gray-200 rounded-md overflow-hidden relative">
+                      {r.photos?.[0]?.url && <img src={r.photos[0].url} className="w-full h-full object-cover" />}
+                      {r.status !== 'AVAILABLE' && (
+                        <div className="absolute inset-0 bg-black/50 text-white text-[10px] flex items-center justify-center font-bold uppercase">
+                          {r.status === 'SOLD_OUT' ? 'Out' : 'N/A'}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-gray-800 line-clamp-1">{r.name}</div>
+                      <div className="text-orange-600 font-bold text-xs">{r.price.toLocaleString('vi-VN')}đ</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* REVIEWS SECTION */}
+          <div className="mt-8 border-t border-gray-100 pt-6 px-1">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                <Star className="fill-yellow-400 text-yellow-400" size={20} />
+                <span>Reviews</span>
+              </h3>
+              {isLoggedIn && !showReviewForm && (
+                <button
+                  onClick={() => setShowReviewForm(true)}
+                  className="text-orange-600 font-bold text-sm border border-orange-200 px-3 py-1 rounded-full hover:bg-orange-50 transition-colors flex items-center gap-1"
+                >
+                  <MessageSquarePlus size={16} />
+                  <span>Rate it?</span>
+                </button>
+              )}
+            </div>
+
+            {/* Add Review Form */}
+            {showReviewForm && (
+              <div className="bg-orange-50/50 p-4 rounded-2xl mb-6 border border-orange-100 animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="flex gap-2 mb-3">
+                  {[1, 2, 3, 4, 5].map(s => (
+                    <button key={s} onClick={() => setNewRating(s)}>
+                      <Star className={`${s <= newRating ? 'fill-orange-400 text-orange-400' : 'text-gray-300'}`} size={24} />
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="How was this dish? Share your thoughts..."
+                  className="w-full bg-white border border-orange-100 p-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 min-h-[80px]"
+                />
+                <div className="flex gap-2 mt-3">
+                  <button
+                    disabled={isSubmittingReview}
+                    onClick={handleSubmitReview}
+                    className="flex-1 bg-orange-600 text-white font-bold py-2 rounded-lg text-sm disabled:opacity-50"
+                  >
+                    {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
+                  </button>
+                  <button
+                    onClick={() => setShowReviewForm(false)}
+                    className="px-4 py-2 text-gray-400 font-bold text-sm"
+                  >Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {/* Review List */}
+            <div className="space-y-6">
+              {reviews.length === 0 && !loadingReviews && (
+                <p className="text-gray-400 text-sm text-center py-6 italic">No reviews yet for this item.</p>
+              )}
+              {reviews.map(rev => (
+                <div key={rev.id} className="group">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="font-bold text-gray-800 text-sm">
+                      {rev.user?.fullName || rev.customerName || "Customer"}
+                    </span>
+                    <div className="flex gap-0.5">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} size={10} className={`${i < rev.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-gray-600 text-sm leading-relaxed">{rev.comment}</p>
+                  <div className="text-[10px] text-gray-400 mt-1">{new Date(rev.createdAt).toLocaleDateString('en-US')}</div>
+                </div>
+              ))}
+
+              {hasMoreReviews && (
+                <button
+                  onClick={handleLoadMoreReviews}
+                  disabled={loadingReviews}
+                  className="w-full py-3 text-orange-600 font-bold text-sm flex items-center justify-center gap-1 hover:bg-orange-50 rounded-xl transition-colors"
+                >
+                  {loadingReviews ? 'Loading...' : (
+                    <>
+                      <span>Load more reviews</span>
+                      <ChevronDown size={16} />
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Bar */}
+        <div className="p-4 bg-white border-t border-gray-100 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-10 sticky bottom-0">
+          {isAvailable ? (
+            <div className="flex gap-4">
+              {/* Quantity */}
+              <div className="flex items-center gap-3 bg-gray-100 rounded-xl px-3 py-2">
+                <button
+                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm font-bold text-gray-600 active:scale-90 transition-transform"
+                >-</button>
+                <span className="font-bold text-lg w-4 text-center">{quantity}</span>
+                <button
+                  onClick={() => setQuantity(q => q + 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm font-bold text-green-600 active:scale-90 transition-transform"
+                >+</button>
+              </div>
+
+              {/* Add Button */}
+              <button
+                onClick={handleConfirm}
+                className="flex-1 bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-orange-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+              >
+                <span>Add</span>
+                <span>•</span>
+                <span>{(item.price * quantity).toLocaleString('vi-VN')}đ</span>
+              </button>
+            </div>
+          ) : (
+            <div className="w-full bg-gray-100 text-gray-400 py-3 rounded-xl font-bold text-center cursor-not-allowed uppercase tracking-wide">
+              {item.status === 'SOLD_OUT' ? 'Sold Out' : 'Temporarily Unavailable'}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
