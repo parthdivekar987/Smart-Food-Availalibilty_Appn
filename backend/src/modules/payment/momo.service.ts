@@ -1,9 +1,8 @@
 import crypto from 'crypto';
 import axios from 'axios';
-import { PrismaClient, PaymentMethod, PaymentStatus } from '@prisma/client';
+import { PaymentMethod, PaymentStatus } from '@prisma/client';
 import * as notificationService from '../notification/notification.service';
-
-const prisma = new PrismaClient();
+import prisma from '../../shared/config/prisma.client';
 
 // MoMo Sandbox Configuration
 const MOMO_CONFIG = {

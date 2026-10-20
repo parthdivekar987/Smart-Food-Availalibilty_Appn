@@ -1,9 +1,7 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import fs from "fs";
 import path from "path";
-
-const prisma = new PrismaClient();
+import prisma from "../../shared/config/prisma.client";
 
 export const uploadPhotos = async (req: Request, res: Response) => {
     try {

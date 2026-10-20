@@ -1,9 +1,8 @@
-import { PrismaClient, Table } from "@prisma/client";
+import { Table } from "@prisma/client";
 import QRCode from "qrcode";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-
-const prisma = new PrismaClient();
+import prisma from "../../shared/config/prisma.client";
 
 // 1. Create Table
 export const createTable = async (name: string, capacity: number, restaurantId?: string) => {

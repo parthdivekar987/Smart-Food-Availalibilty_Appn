@@ -1,7 +1,6 @@
-import { PrismaClient, Role, User } from "@prisma/client";
+import { Role, User } from "@prisma/client";
 import bcrypt from "bcrypt";
-
-const prisma = new PrismaClient();
+import prisma from "../../shared/config/prisma.client";
 
 // Create a new user Staff
 export const createUser = async (data: any) => {

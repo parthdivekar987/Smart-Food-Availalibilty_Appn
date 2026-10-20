@@ -1,4 +1,4 @@
-import { PrismaClient, Role } from "@prisma/client";
+import { Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import {
   generateAccessToken,
@@ -7,8 +7,7 @@ import {
 } from "../../shared/utils/token";
 import crypto from "crypto";
 import { User } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../../shared/config/prisma.client";
 
 export const register = async (
   email: string,

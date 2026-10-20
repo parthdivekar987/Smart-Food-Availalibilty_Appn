@@ -1,8 +1,7 @@
-import { PrismaClient, PaymentMethod, PaymentStatus, OrderStatus, TableSessionStatus } from "@prisma/client";
+import { PaymentMethod, PaymentStatus, OrderStatus, TableSessionStatus } from "@prisma/client";
 import Stripe from "stripe";
 import { env } from "process";
-
-const prisma = new PrismaClient();
+import prisma from "../../shared/config/prisma.client";
 export const stripe = new Stripe(env.STRIPE_SECRET_KEY || "", {
     apiVersion: "2022-11-15",
 });

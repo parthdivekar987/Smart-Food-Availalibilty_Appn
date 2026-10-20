@@ -1,7 +1,5 @@
-import { PrismaClient } from "@prisma/client";
 import { redisService } from "../../shared/services/redis.service";
-
-const prisma = new PrismaClient();
+import prisma from "../../shared/config/prisma.client";
 
 import * as tableService from "../table/table.service";
 

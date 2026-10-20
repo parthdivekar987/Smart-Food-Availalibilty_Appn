@@ -1,7 +1,7 @@
-import { PrismaClient, MenuItemStatus, Prisma } from "@prisma/client";
+import { MenuItemStatus, Prisma } from "@prisma/client";
 import { MenuItemOptions, SortOption } from "../../types/menu.types";
 import { redisService } from "../../shared/services/redis.service";
-const prisma = new PrismaClient();
+import prisma from "../../shared/config/prisma.client";
 
 //Get id of restaurant
 const getDefaultRestaurantId = async () => {

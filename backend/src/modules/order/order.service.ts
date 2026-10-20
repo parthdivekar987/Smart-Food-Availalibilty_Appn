@@ -1,7 +1,6 @@
-import { PrismaClient, OrderStatus } from "@prisma/client";
+import { OrderStatus } from "@prisma/client";
 import * as notificationService from "../notification/notification.service";
-
-const prisma = new PrismaClient();
+import prisma from "../../shared/config/prisma.client";
 
 // Types for order creation
 interface OrderItemInput {

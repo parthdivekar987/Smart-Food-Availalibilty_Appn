@@ -2,10 +2,8 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as JwtStrategy, ExtractJwt } from "passport-jwt";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-
-const prisma = new PrismaClient();
+import prisma from "./prisma.client";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-default";
 

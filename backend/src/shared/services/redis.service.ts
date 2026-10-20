@@ -6,6 +6,8 @@ class RedisService {
   private isConnected: boolean = false;
   private memoryFallback: Map<string, { value: string; expiresAt: number }> = new Map();
 
+  private hasLoggedWarning: boolean = false;
+
   constructor() {
     this.init();
   }
@@ -14,7 +16,15 @@ class RedisService {
     const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 
     try {
-      this.client = createClient({ url: redisUrl });
+      this.client = createClient({ 
+        url: redisUrl,
+        socket: {
+          reconnectStrategy: (retries) => {
+            if (retries > 3) return new Error("Redis connection stopped retrying");
+            return Math.min(retries * 1000, 3000);
+          }
+        }
+      });
 
       this.client.on("connect", () => {
         this.isConnected = true;
@@ -23,19 +33,25 @@ class RedisService {
 
       this.client.on("error", (err) => {
         this.isConnected = false;
-        // Don't spam console if local redis server is offline - log once
-        if (process.env.NODE_ENV !== "test") {
+        if (!this.hasLoggedWarning) {
+          this.hasLoggedWarning = true;
           console.warn("⚠️  Redis: Connection unavailable, using high-speed in-memory fallback:", err.message);
         }
       });
 
       await this.client.connect().catch((err) => {
         this.isConnected = false;
-        console.warn("⚠️  Redis: Running in in-memory fallback mode.");
+        if (!this.hasLoggedWarning) {
+          this.hasLoggedWarning = true;
+          console.warn("⚠️  Redis: Running in in-memory fallback mode.");
+        }
       });
     } catch (e) {
       this.isConnected = false;
-      console.warn("⚠️  Redis: Initialized in in-memory fallback mode.");
+      if (!this.hasLoggedWarning) {
+        this.hasLoggedWarning = true;
+        console.warn("⚠️  Redis: Initialized in in-memory fallback mode.");
+      }
     }
   }
 
