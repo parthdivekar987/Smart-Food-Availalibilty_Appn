@@ -17,12 +17,18 @@ import { Footer } from '../components/common/Footer';
 import { Header } from '../components/common/Header';
 import AndroidBottomNav from '../components/mobile/AndroidBottomNav';
 import Restaurant3DFloorPlan from '../components/3d/Restaurant3DFloorPlan';
+import CokeHeroCard from '../components/3d/CokeHeroCard';
 
-// Category emoji map
+// Category emoji map (Master Prompt Strict Categories)
 const CATEGORY_EMOJIS: Record<string, string> = {
-  burger: '🍔', pizza: '🍕', sushi: '🍱', drink: '🍹', coffee: '☕',
-  dessert: '🍰', salad: '🥗', pasta: '🍝', chicken: '🍗', seafood: '🦞',
-  steak: '🥩', soup: '🍜', vegetarian: '🥦', appetizer: '🥟', default: '🍽️'
+  kathi: '🌯', roll: '🌯',
+  pizza: '🍕',
+  burger: '🍔',
+  starter: '🥟', appetizer: '🥟', chaat: '🥟',
+  main: '🍛', curry: '🍛', rice: '🍛', biryani: '🍛',
+  dessert: '🍰', sweet: '🍰',
+  beverage: '🥤', drink: '🥤', coke: '🥤', soda: '🥤',
+  default: '🍽️'
 };
 
 const getCategoryEmoji = (name: string) => {
@@ -291,6 +297,23 @@ export default function MenuPage() {
 
       {/* Menu List */}
       <div className={`p-4 flex-1 ${viewMode === 'grid' ? 'grid grid-cols-2 gap-3' : 'space-y-3'}`}>
+        {/* Master Prompt Drinks Hero: Photoreal Coke Card when in Beverages */}
+        {(() => {
+          const catName = categories.find(c => c.id === selectedCategory)?.name || '';
+          const isBev = catName.toLowerCase().includes('beverage') || selectedCategory.toLowerCase().includes('beverage');
+          if (isBev) {
+            return (
+              <div className={viewMode === 'grid' ? 'col-span-2' : ''}>
+                <CokeHeroCard
+                  cokeItem={items.find(i => i.name.toLowerCase().includes('coke') || i.name.toLowerCase().includes('cola'))}
+                  onView3D={(dish) => setSelectedItem(dish)}
+                />
+              </div>
+            );
+          }
+          return null;
+        })()}
+
         {items.length === 0 && !loading && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -337,8 +360,8 @@ export default function MenuPage() {
                       </div>
                     )}
                     {!isUnavailable && (
-                      <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm text-amber-300 text-[8px] font-black px-1.5 py-0.5 rounded-lg flex items-center gap-0.5">
-                        <Box size={8} /> 3D
+                      <div className="absolute bottom-2 right-2 bg-black/75 backdrop-blur-sm text-amber-300 text-[9px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 border border-amber-400/20 shadow-sm">
+                        <Box size={10} className="animate-pulse" /> <span>3D</span>
                       </div>
                     )}
                     {item.status === 'SOLD_OUT' && (
@@ -351,15 +374,28 @@ export default function MenuPage() {
                     <h3 className={`font-bold text-sm line-clamp-2 flex-1 leading-tight ${isUnavailable ? 'text-gray-400' : 'text-gray-900'}`}>
                       {item.name}
                     </h3>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className={`font-extrabold text-base ${isUnavailable ? 'text-gray-400' : 'text-orange-600'}`}>
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
+                      <span className={`font-extrabold text-sm ${isUnavailable ? 'text-gray-400' : 'text-orange-600'}`}>
                         {item.price.toLocaleString()}đ
                       </span>
-                      {!isUnavailable && (
-                        <div className="w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center">
-                          <span className="text-white font-bold text-lg leading-none">+</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedItem(item);
+                          }}
+                          className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 text-[10px] font-black rounded-lg flex items-center gap-1 border border-amber-500/20 transition-all active:scale-95"
+                          title="View dish in interactive 3D"
+                        >
+                          <Box size={11} className="text-amber-600" />
+                          <span>View Food</span>
+                        </button>
+                        {!isUnavailable && (
+                          <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm leading-none">
+                            +
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -396,7 +432,7 @@ export default function MenuPage() {
                     </div>
                   )}
                   {!isUnavailable && (
-                    <div className="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm text-amber-300 text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                    <div className="absolute bottom-1 right-1 bg-black/75 backdrop-blur-sm text-amber-300 text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-amber-400/20">
                       <Box size={9} /><span>3D</span>
                     </div>
                   )}
@@ -447,15 +483,27 @@ export default function MenuPage() {
                     })()}
                   </div>
 
-                  <div className="flex justify-between items-center mt-1.5">
-                    <span className={`font-extrabold text-lg ${isUnavailable ? 'text-gray-400' : 'text-orange-600'}`}>
+                  <div className="flex justify-between items-center mt-1.5 pt-1 border-t border-gray-50">
+                    <span className={`font-extrabold text-base ${isUnavailable ? 'text-gray-400' : 'text-orange-600'}`}>
                       {item.price.toLocaleString()}đ
                     </span>
-                    {!isUnavailable && (
-                      <div className="w-8 h-8 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center hover:bg-orange-100 transition-colors border border-orange-200">
-                        <span className="text-xl font-bold leading-none">+</span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedItem(item);
+                        }}
+                        className="px-2.5 py-1.5 bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-orange-700 text-xs font-black rounded-xl flex items-center gap-1.5 border border-orange-200/80 shadow-xs active:scale-95 transition-all"
+                      >
+                        <Box size={13} className="text-orange-600 animate-pulse" />
+                        <span>View Food</span>
+                      </button>
+                      {!isUnavailable && (
+                        <div className="w-8 h-8 bg-orange-50 text-orange-600 rounded-full flex items-center justify-center hover:bg-orange-100 transition-colors border border-orange-200">
+                          <span className="text-xl font-bold leading-none">+</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </motion.div>

@@ -221,7 +221,297 @@ export const Dish3DViewer: React.FC<Dish3DViewerProps> = ({ item, onClose, inlin
         b.rotation.set(0.1, Math.random() * Math.PI, 0.2);
         foodGroup.add(b);
       }
-    } else if (itemName.includes('drink') || itemCat.includes('drink') || itemName.includes('cocktail') || itemName.includes('tea') || itemName.includes('coffee')) {
+    } else if (itemName.includes('biryani') || itemName.includes('rice') || itemName.includes('pulao')) {
+      // 3D DUM BIRYANI - Iconic layered rice
+      // Handi / Deg base
+      const handiGeo = new THREE.CylinderGeometry(1.4, 1.0, 1.1, 32);
+      const handiMat = new THREE.MeshPhysicalMaterial({ color: 0x8B4513, roughness: 0.6, metalness: 0.15 });
+      const handi = new THREE.Mesh(handiGeo, handiMat);
+      handi.position.y = 0.75;
+      handi.castShadow = true;
+      foodGroup.add(handi);
+      itemMaterials.push(handiMat);
+
+      // Saffron rice mound
+      const riceMoundGeo = new THREE.SphereGeometry(1.38, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+      const riceMat = new THREE.MeshStandardMaterial({ color: 0xF5A623, roughness: 0.9 });
+      const riceMound = new THREE.Mesh(riceMoundGeo, riceMat);
+      riceMound.position.y = 1.32;
+      riceMound.scale.set(1, 0.55, 1);
+      foodGroup.add(riceMound);
+      itemMaterials.push(riceMat);
+
+      // Dark saffron streaks on top
+      const streakMat = new THREE.MeshStandardMaterial({ color: 0xFF6600, roughness: 0.7 });
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        const streakGeo = new THREE.SphereGeometry(0.22, 8, 6);
+        const streak = new THREE.Mesh(streakGeo, streakMat);
+        streak.position.set(Math.cos(angle) * 0.7, 1.52, Math.sin(angle) * 0.7);
+        streak.scale.set(1.2, 0.3, 0.8);
+        foodGroup.add(streak);
+      }
+      itemMaterials.push(streakMat);
+
+      // Fried onion garnish (golden rings)
+      const onionMat = new THREE.MeshStandardMaterial({ color: 0xD4A017, roughness: 0.5 });
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2 + 0.4;
+        const onionGeo = new THREE.TorusGeometry(0.14, 0.04, 6, 16);
+        const onion = new THREE.Mesh(onionGeo, onionMat);
+        onion.position.set(Math.cos(angle) * 0.55, 1.57, Math.sin(angle) * 0.55);
+        onion.rotation.x = 0.8;
+        foodGroup.add(onion);
+      }
+      itemMaterials.push(onionMat);
+
+      // Mint leaves
+      const mintMat = new THREE.MeshStandardMaterial({ color: 0x2ECC71, roughness: 0.6 });
+      const mintGeo = new THREE.CylinderGeometry(0.1, 0.05, 0.04, 8);
+      [[0.3, 1.6, 0.3], [-0.4, 1.61, 0.1], [0.1, 1.62, -0.5]].forEach(([x, y, z]) => {
+        const m = new THREE.Mesh(mintGeo, mintMat);
+        m.position.set(x, y, z);
+        foodGroup.add(m);
+      });
+      itemMaterials.push(mintMat);
+
+    } else if (itemName.includes('curry') || itemName.includes('masala') || itemName.includes('gravy') || itemName.includes('paneer') || itemName.includes('chicken') || itemName.includes('dal') || itemName.includes('sabzi') || itemCat.includes('curry')) {
+      // 3D INDIAN CURRY / KARAHI
+      // Karahi bowl
+      const karGeo = new THREE.SphereGeometry(1.5, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.55);
+      const karMat = new THREE.MeshPhysicalMaterial({ color: 0x2C2C2C, metalness: 0.7, roughness: 0.3, clearcoat: 0.4 });
+      const karahi = new THREE.Mesh(karGeo, karMat);
+      karahi.position.y = 0.55;
+      karahi.rotation.x = Math.PI;
+      karahi.scale.set(1, 0.6, 1);
+      karahi.castShadow = true;
+      foodGroup.add(karahi);
+      itemMaterials.push(karMat);
+
+      // Curry sauce
+      const sauceGeo = new THREE.SphereGeometry(1.4, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.48);
+      const sauceMat = new THREE.MeshPhysicalMaterial({ color: 0xCC4400, roughness: 0.3, clearcoat: 0.5 });
+      const sauce = new THREE.Mesh(sauceGeo, sauceMat);
+      sauce.position.y = 0.58;
+      sauce.rotation.x = Math.PI;
+      sauce.scale.set(1, 0.55, 1);
+      foodGroup.add(sauce);
+      itemMaterials.push(sauceMat);
+
+      // Paneer/meat cubes
+      const cubeMat = new THREE.MeshStandardMaterial({ color: itemName.includes('paneer') ? 0xFFF8E7 : 0x8B2500, roughness: 0.6 });
+      itemMaterials.push(cubeMat);
+      [[0.3, 0.72, 0.2], [-0.25, 0.74, -0.3], [0.5, 0.71, -0.4], [-0.5, 0.7, 0.4]].forEach(([x, y, z]) => {
+        const c = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.32), cubeMat);
+        c.position.set(x, y, z);
+        c.rotation.set(0.1, Math.random() * 0.6, 0.1);
+        c.castShadow = true;
+        foodGroup.add(c);
+      });
+
+      // Cream swirl on top
+      const creamGeo = new THREE.TorusGeometry(0.45, 0.07, 8, 24, Math.PI * 1.4);
+      const creamMat = new THREE.MeshStandardMaterial({ color: 0xFFFAF0, roughness: 0.4 });
+      const cream = new THREE.Mesh(creamGeo, creamMat);
+      cream.position.y = 0.8;
+      cream.rotation.x = -Math.PI / 2;
+      foodGroup.add(cream);
+      itemMaterials.push(creamMat);
+
+      // Cilantro
+      const coriMat = new THREE.MeshStandardMaterial({ color: 0x27AE60, roughness: 0.7 });
+      [[0, 0.82, 0.2], [0.3, 0.8, -0.1]].forEach(([x, y, z]) => {
+        const coriGeo = new THREE.SphereGeometry(0.1, 8, 6);
+        const c = new THREE.Mesh(coriGeo, coriMat);
+        c.position.set(x, y, z);
+        c.scale.set(1.5, 0.3, 1);
+        foodGroup.add(c);
+      });
+      itemMaterials.push(coriMat);
+
+    } else if (itemName.includes('naan') || itemName.includes('roti') || itemName.includes('paratha') || itemName.includes('chapati') || itemName.includes('bread') || itemCat.includes('bread')) {
+      // 3D NAAN / ROTI - flatbread with char marks
+      // Flatbread
+      const nBlobs: number[] = [];
+      const nBlobCount = 40;
+      const nBase = new THREE.BufferGeometry();
+      const nPositions = new Float32Array(nBlobCount * 3);
+      for (let i = 0; i < nBlobCount; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const r = Math.random() * 1.55;
+        nPositions[i * 3] = Math.cos(theta) * r;
+        nPositions[i * 3 + 1] = 0.18 + Math.random() * 0.08;
+        nPositions[i * 3 + 2] = Math.sin(theta) * r * 0.7;
+      }
+      nBase.setAttribute('position', new THREE.BufferAttribute(nPositions, 3));
+
+      // Naan body
+      const naanGeo = new THREE.CylinderGeometry(1.7, 1.72, 0.14, 32);
+      const naanMat = new THREE.MeshStandardMaterial({ color: 0xD4974A, roughness: 0.85 });
+      const naan = new THREE.Mesh(naanGeo, naanMat);
+      naan.position.y = 0.18;
+      naan.scale.set(1, 1, 0.65);
+      naan.castShadow = true;
+      foodGroup.add(naan);
+      itemMaterials.push(naanMat);
+
+      // Char spots (brown marks from tandoor)
+      const charMat = new THREE.MeshStandardMaterial({ color: 0x5C3317, roughness: 0.9 });
+      itemMaterials.push(charMat);
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.4;
+        const rad = 0.5 + Math.random() * 0.8;
+        const charGeo = new THREE.SphereGeometry(0.06 + Math.random() * 0.09, 8, 6);
+        const c = new THREE.Mesh(charGeo, charMat);
+        c.position.set(Math.cos(angle) * rad, 0.27, Math.sin(angle) * rad * 0.65);
+        c.scale.set(1.2, 0.2, 0.9);
+        foodGroup.add(c);
+      }
+
+      // Butter / ghee on top (golden sheen)
+      const butterGeo2 = new THREE.SphereGeometry(0.6, 16, 8);
+      const butterMat2 = new THREE.MeshPhysicalMaterial({ color: 0xFFE766, roughness: 0.2, metalness: 0.1, transparent: true, opacity: 0.7 });
+      const butter2 = new THREE.Mesh(butterGeo2, butterMat2);
+      butter2.position.set(-0.2, 0.27, 0);
+      butter2.scale.set(1.2, 0.12, 0.9);
+      foodGroup.add(butter2);
+      itemMaterials.push(butterMat2);
+
+    } else if (itemName.includes('kathi') || itemName.includes('roll') || itemName.includes('wrap') || itemCat.includes('roll')) {
+      // 3D KATHI ROLL - wrapped street food
+      // Main roll body
+      const rollGeo = new THREE.CylinderGeometry(0.55, 0.55, 2.8, 20);
+      const rollMat = new THREE.MeshStandardMaterial({ color: 0xD4974A, roughness: 0.8 });
+      const roll = new THREE.Mesh(rollGeo, rollMat);
+      roll.rotation.z = Math.PI / 2;
+      roll.position.set(0, 0.65, 0);
+      roll.scale.set(1, 1, 0.95);
+      roll.castShadow = true;
+      foodGroup.add(roll);
+      itemMaterials.push(rollMat);
+
+      // Char lines on flatbread
+      const charM = new THREE.MeshStandardMaterial({ color: 0x5C3317, roughness: 0.9 });
+      itemMaterials.push(charM);
+      [-0.5, 0, 0.5].forEach((z) => {
+        const lineGeo = new THREE.CylinderGeometry(0.01, 0.01, 2.82, 6);
+        const line = new THREE.Mesh(lineGeo, charM);
+        line.rotation.z = Math.PI / 2;
+        line.position.set(0, 0.65 + z * 0.25, z * 0.3);
+        foodGroup.add(line);
+      });
+
+      // Filling visible at ends - colorful vegetables
+      const fillingColors = [0xFF4500, 0xFFD700, 0x32CD32];
+      fillingColors.forEach((color, i) => {
+        const fGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.18, 16);
+        const fMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
+        const filling = new THREE.Mesh(fGeo, fMat);
+        filling.rotation.z = Math.PI / 2;
+        filling.position.set(-1.38, 0.65, (i - 1) * 0.15);
+        foodGroup.add(filling);
+        itemMaterials.push(fMat);
+      });
+
+      // Paper wrap around middle
+      const paperGeo = new THREE.CylinderGeometry(0.6, 0.6, 1.0, 20, 1, true);
+      const paperMat = new THREE.MeshStandardMaterial({ color: 0xFAFAFA, roughness: 0.9, side: THREE.DoubleSide });
+      const paper = new THREE.Mesh(paperGeo, paperMat);
+      paper.rotation.z = Math.PI / 2;
+      paper.position.set(0.2, 0.65, 0);
+      foodGroup.add(paper);
+      itemMaterials.push(paperMat);
+
+    } else if (itemName.includes('coke') || itemName.includes('cola') || itemName.includes('pepsi') || itemName.includes('soft drink') || itemName.includes('soda')) {
+      // 3D ICONIC COKE CAN with animated pour effect
+      // Can body
+      const canGeo = new THREE.CylinderGeometry(0.65, 0.65, 2.0, 32);
+      const canMat = new THREE.MeshPhysicalMaterial({ color: 0xCC0000, roughness: 0.3, metalness: 0.85, clearcoat: 0.5 });
+      const can = new THREE.Mesh(canGeo, canMat);
+      can.position.y = 1.15;
+      can.castShadow = true;
+      foodGroup.add(can);
+      itemMaterials.push(canMat);
+
+      // Can top
+      const canTopGeo = new THREE.CylinderGeometry(0.58, 0.65, 0.1, 32);
+      const canTop = new THREE.Mesh(canTopGeo, canMat);
+      canTop.position.y = 2.2;
+      foodGroup.add(canTop);
+
+      // Pull tab
+      const tabGeo = new THREE.TorusGeometry(0.12, 0.03, 8, 16, Math.PI);
+      const tabMat = new THREE.MeshStandardMaterial({ color: 0xC0C0C0, metalness: 0.9, roughness: 0.2 });
+      const tab = new THREE.Mesh(tabGeo, tabMat);
+      tab.position.set(0.2, 2.3, 0);
+      tab.rotation.x = -0.3;
+      foodGroup.add(tab);
+      itemMaterials.push(tabMat);
+
+      // White logo stripe band
+      const bandGeo = new THREE.CylinderGeometry(0.67, 0.67, 0.5, 32, 1, true);
+      const bandMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.5, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+      const band = new THREE.Mesh(bandGeo, bandMat);
+      band.position.y = 1.1;
+      foodGroup.add(band);
+      itemMaterials.push(bandMat);
+
+      // Bubbles rising (cola carbonation)
+      const bubbleMat = new THREE.MeshPhysicalMaterial({ color: 0xCCEEFF, transparent: true, opacity: 0.5, roughness: 0.05, transmission: 0.8 });
+      itemMaterials.push(bubbleMat);
+      for (let i = 0; i < 12; i++) {
+        const r = 0.3 + Math.random() * 0.2;
+        const angle = Math.random() * Math.PI * 2;
+        const bGeo = new THREE.SphereGeometry(0.04 + Math.random() * 0.05, 8, 8);
+        const b = new THREE.Mesh(bGeo, bubbleMat);
+        b.position.set(Math.cos(angle) * r, 0.18 + Math.random() * 0.4, Math.sin(angle) * r);
+        foodGroup.add(b);
+      }
+
+    } else if (itemName.includes('lassi') || itemName.includes('chaas') || itemName.includes('buttermilk') || itemName.includes('milkshake') || itemName.includes('shake')) {
+      // 3D LASSI / MILKSHAKE in clay kulhar
+      const kulharGeo = new THREE.CylinderGeometry(0.9, 0.68, 1.4, 32);
+      const kulharMat = new THREE.MeshStandardMaterial({ color: 0xC4825A, roughness: 0.85 });
+      const kulhar = new THREE.Mesh(kulharGeo, kulharMat);
+      kulhar.position.y = 0.85;
+      kulhar.castShadow = true;
+      foodGroup.add(kulhar);
+      itemMaterials.push(kulharMat);
+
+      // Lassi liquid
+      const lassiMat = new THREE.MeshPhysicalMaterial({ 
+        color: itemName.includes('mango') ? 0xFFB347 : (itemName.includes('rose') ? 0xFFB6C1 : 0xFFF8DC), 
+        roughness: 0.2, clearcoat: 0.4, transparent: true, opacity: 0.9 
+      });
+      const lassiGeo = new THREE.CylinderGeometry(0.84, 0.63, 1.1, 32);
+      const lassi = new THREE.Mesh(lassiGeo, lassiMat);
+      lassi.position.y = 0.85;
+      foodGroup.add(lassi);
+      itemMaterials.push(lassiMat);
+
+      // Cream / froth on top
+      const frothGeo = new THREE.SphereGeometry(0.88, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.4);
+      const frothMat = new THREE.MeshStandardMaterial({ color: 0xFFFDF0, roughness: 0.6 });
+      const froth = new THREE.Mesh(frothGeo, frothMat);
+      froth.position.y = 1.55;
+      froth.rotation.x = Math.PI;
+      froth.scale.set(1, 0.4, 1);
+      foodGroup.add(froth);
+      itemMaterials.push(frothMat);
+
+      // Rose petal garnish
+      const petalMat = new THREE.MeshStandardMaterial({ color: 0xFF69B4, roughness: 0.5 });
+      for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2;
+        const pGeo = new THREE.SphereGeometry(0.1, 8, 6);
+        const p = new THREE.Mesh(pGeo, petalMat);
+        p.position.set(Math.cos(angle) * 0.5, 1.62, Math.sin(angle) * 0.5);
+        p.scale.set(1.2, 0.2, 0.8);
+        foodGroup.add(p);
+      }
+      itemMaterials.push(petalMat);
+
+    } else if (itemName.includes('drink') || itemCat.includes('drink') || itemName.includes('cocktail') || itemName.includes('tea') || itemName.includes('coffee') || itemName.includes('juice') || itemName.includes('water') || itemCat.includes('beverage')) {
       // 3D COCKTAIL / BEVERAGE GLASS
       const glassGeo = new THREE.CylinderGeometry(0.68, 0.48, 1.8, 32, 1, true);
       const glassMat = new THREE.MeshPhysicalMaterial({
@@ -333,50 +623,142 @@ export const Dish3DViewer: React.FC<Dish3DViewerProps> = ({ item, onClose, inlin
       wasabi.position.set(-1.3, 0.28, -0.6);
       foodGroup.add(wasabi);
       itemMaterials.push(wasabiMat);
-    } else {
-      // 3D GOURMET STEAK & VEGETABLES (Default Fine Dining Platter)
-      const steakGeo = new THREE.CylinderGeometry(0.9, 0.95, 0.3, 32);
-      const steakMat = new THREE.MeshStandardMaterial({
-        color: 0x4a2818,
-        roughness: 0.75,
-        bumpScale: 0.08,
-      });
-      const steak = new THREE.Mesh(steakGeo, steakMat);
-      steak.scale.set(1.3, 1, 0.9);
-      steak.position.set(-0.2, 0.3, 0);
-      steak.castShadow = true;
-      foodGroup.add(steak);
-      itemMaterials.push(steakMat);
+    } else if (itemName.includes('starter') || itemName.includes('chaat') || itemName.includes('samosa') || itemName.includes('tikka') || itemName.includes('kebab') || itemCat.includes('starter') || itemCat.includes('chaat')) {
+      // 3D SAMOSA / STARTER - triangular pastry
+      const samosaMat = new THREE.MeshStandardMaterial({ color: 0xD4974A, roughness: 0.7 });
+      itemMaterials.push(samosaMat);
+      
+      // 3 samosa triangles
+      for (let i = 0; i < 3; i++) {
+        const angle = (i / 3) * Math.PI * 2;
+        const coneGeo = new THREE.ConeGeometry(0.6, 1.0, 3);
+        const samosa = new THREE.Mesh(coneGeo, samosaMat);
+        samosa.position.set(Math.cos(angle) * 0.7, 0.5, Math.sin(angle) * 0.7);
+        samosa.rotation.y = angle + Math.PI / 6;
+        samosa.rotation.z = 0.5;
+        samosa.castShadow = true;
+        foodGroup.add(samosa);
+      }
 
-      // Herb butter medallion
-      const butterGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.08, 16);
-      const butterMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.4 });
-      const butter = new THREE.Mesh(butterGeo, butterMat);
-      butter.position.set(-0.15, 0.48, 0);
-      foodGroup.add(butter);
-      itemMaterials.push(butterMat);
+      // Green chutney pool
+      const chutneyGeo = new THREE.CylinderGeometry(1.8, 1.85, 0.06, 32);
+      const chutneyMat = new THREE.MeshPhysicalMaterial({ color: 0x228B22, roughness: 0.25, clearcoat: 0.6 });
+      const chutney = new THREE.Mesh(chutneyGeo, chutneyMat);
+      chutney.position.y = 0.25;
+      foodGroup.add(chutney);
+      itemMaterials.push(chutneyMat);
 
-      // Roasted Asparagus stalks (3 spears)
-      const aspGeo = new THREE.CylinderGeometry(0.04, 0.05, 1.4, 12);
-      const aspMat = new THREE.MeshStandardMaterial({ color: 0x3f6212, roughness: 0.6 });
-      itemMaterials.push(aspMat);
-      [-0.1, 0, 0.1].forEach((offset, idx) => {
-        const spear = new THREE.Mesh(aspGeo, aspMat);
-        spear.rotation.z = Math.PI / 2 - 0.2;
-        spear.position.set(0.6 + offset, 0.25, -0.2 + (idx * 0.18));
-        foodGroup.add(spear);
-      });
-
-      // Cherry tomatoes (2 roasted tomatoes)
-      const tomGeo = new THREE.SphereGeometry(0.18, 16, 16);
-      const tomMat = new THREE.MeshPhysicalMaterial({ color: 0xd92626, roughness: 0.3, clearcoat: 0.6 });
-      itemMaterials.push(tomMat);
-      [[0.7, 0.34, 0.4], [0.95, 0.32, 0.15]].forEach(([x, y, z]) => {
-        const t = new THREE.Mesh(tomGeo, tomMat);
+      // Tamarind drizzle
+      const tamGeo = new THREE.CylinderGeometry(0.04, 0.04, 1.5, 6);
+      const tamMat = new THREE.MeshStandardMaterial({ color: 0x6B2B00, roughness: 0.5 });
+      [[0.3, 0.48, -0.5], [-0.5, 0.46, 0.3]].forEach(([x, y, z]) => {
+        const t = new THREE.Mesh(tamGeo, tamMat);
         t.position.set(x, y, z);
-        t.castShadow = true;
+        t.rotation.set(0.4, Math.random(), 0.2);
         foodGroup.add(t);
       });
+      itemMaterials.push(tamMat);
+
+    } else if (itemName.includes('dessert') || itemName.includes('gulab') || itemName.includes('kheer') || itemName.includes('halwa') || itemName.includes('barfi') || itemName.includes('ladoo') || itemName.includes('ice cream') || itemCat.includes('dessert')) {
+      // 3D INDIAN DESSERT - Gulab Jamun in a bowl
+      const bowlGeo = new THREE.SphereGeometry(1.4, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.55);
+      const bowlMat = new THREE.MeshStandardMaterial({ color: 0xF0E6D3, roughness: 0.4 });
+      const bowl = new THREE.Mesh(bowlGeo, bowlMat);
+      bowl.rotation.x = Math.PI;
+      bowl.position.y = 0.62;
+      bowl.scale.set(1, 0.5, 1);
+      bowl.castShadow = true;
+      foodGroup.add(bowl);
+      itemMaterials.push(bowlMat);
+
+      // Sugar syrup
+      const syrupMat = new THREE.MeshPhysicalMaterial({ color: 0xAA6600, roughness: 0.15, clearcoat: 0.7, transparent: true, opacity: 0.85 });
+      const syrupGeo = new THREE.SphereGeometry(1.3, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.48);
+      const syrup = new THREE.Mesh(syrupGeo, syrupMat);
+      syrup.rotation.x = Math.PI;
+      syrup.position.y = 0.64;
+      syrup.scale.set(1, 0.47, 1);
+      foodGroup.add(syrup);
+      itemMaterials.push(syrupMat);
+
+      // Gulab Jamun balls
+      const gjMat = new THREE.MeshPhysicalMaterial({ color: 0x7B3F00, roughness: 0.45, clearcoat: 0.5 });
+      itemMaterials.push(gjMat);
+      [[0, 0.78, 0], [0.55, 0.7, 0.4], [-0.5, 0.72, -0.35], [0.4, 0.72, -0.5]].forEach(([x, y, z]) => {
+        const gjGeo = new THREE.SphereGeometry(0.32, 16, 16);
+        const gj = new THREE.Mesh(gjGeo, gjMat);
+        gj.position.set(x, y, z);
+        gj.castShadow = true;
+        foodGroup.add(gj);
+      });
+
+      // Rose petal garnish
+      const petalMat2 = new THREE.MeshStandardMaterial({ color: 0xFF9999, roughness: 0.5 });
+      for (let i = 0; i < 3; i++) {
+        const angle = (i / 3) * Math.PI * 2;
+        const pGeo = new THREE.SphereGeometry(0.09, 8, 6);
+        const p = new THREE.Mesh(pGeo, petalMat2);
+        p.position.set(Math.cos(angle) * 0.4, 0.98, Math.sin(angle) * 0.4);
+        p.scale.set(1.3, 0.2, 0.9);
+        foodGroup.add(p);
+      }
+      itemMaterials.push(petalMat2);
+
+    } else {
+      // 3D DEFAULT INDIAN THALI PLATTER
+      // Large thali plate
+      const thaliGeo = new THREE.CylinderGeometry(2.0, 1.9, 0.1, 40);
+      const thaliMat = new THREE.MeshStandardMaterial({ color: 0xC0C0C0, metalness: 0.7, roughness: 0.3 });
+      const thali = new THREE.Mesh(thaliGeo, thaliMat);
+      thali.position.y = 0.22;
+      thali.castShadow = true;
+      foodGroup.add(thali);
+      itemMaterials.push(thaliMat);
+
+      // Small katoris (bowls) around the plate
+      const katoriGeo = new THREE.SphereGeometry(0.35, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+      const katoriMat = new THREE.MeshStandardMaterial({ color: 0xD0D0D0, metalness: 0.6, roughness: 0.4 });
+      const katoriColors = [0xCC4400, 0xFFD700, 0x228B22, 0xF5A623, 0xB22222];
+      itemMaterials.push(katoriMat);
+      katoriColors.forEach((color, i) => {
+        const angle = (i / katoriColors.length) * Math.PI * 2;
+        const rad = 1.3;
+        const katori = new THREE.Mesh(katoriGeo, katoriMat);
+        katori.rotation.x = Math.PI;
+        katori.position.set(Math.cos(angle) * rad, 0.32, Math.sin(angle) * rad);
+        katori.scale.set(1, 0.5, 1);
+        foodGroup.add(katori);
+
+        // Fill each katori with food
+        const fillMat = new THREE.MeshStandardMaterial({ color, roughness: 0.4 });
+        const fillGeo = new THREE.SphereGeometry(0.3, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+        const fill = new THREE.Mesh(fillGeo, fillMat);
+        fill.rotation.x = Math.PI;
+        fill.position.set(Math.cos(angle) * rad, 0.37, Math.sin(angle) * rad);
+        fill.scale.set(1, 0.38, 1);
+        foodGroup.add(fill);
+        itemMaterials.push(fillMat);
+      });
+
+      // Rice mound in center
+      const riceGeo2 = new THREE.SphereGeometry(0.55, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+      const riceMat2 = new THREE.MeshStandardMaterial({ color: 0xFFFFF0, roughness: 0.85 });
+      const riceCenter = new THREE.Mesh(riceGeo2, riceMat2);
+      riceCenter.rotation.x = Math.PI;
+      riceCenter.position.y = 0.4;
+      riceCenter.scale.set(1, 0.6, 1);
+      foodGroup.add(riceCenter);
+      itemMaterials.push(riceMat2);
+
+      // Papad (crispy round bread)
+      const papadGeo = new THREE.CylinderGeometry(0.38, 0.4, 0.03, 20);
+      const papadMat = new THREE.MeshStandardMaterial({ color: 0xE8C99A, roughness: 0.9 });
+      const papad = new THREE.Mesh(papadGeo, papadMat);
+      papad.position.set(0.65, 0.29, 0.65);
+      papad.rotation.y = 0.3;
+      papad.castShadow = true;
+      foodGroup.add(papad);
+      itemMaterials.push(papadMat);
     }
 
     materialsRef.current = itemMaterials;
