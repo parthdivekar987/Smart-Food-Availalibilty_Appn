@@ -6,6 +6,7 @@
     "dev": "ts-node-dev --poll src/server.ts",
     "build": "tsc",
     "start": "node dist/src/server.js",
+    "test": "ts-node tests/master_prompt_verification.test.ts",
     "prisma": "prisma"
   },
   "dependencies": {
