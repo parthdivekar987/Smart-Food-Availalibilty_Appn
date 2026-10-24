@@ -7,7 +7,6 @@ import {
   ArrowRight, ShieldCheck, Utensils, Star, Flame, ArrowLeft
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import FloatingFoodSpaceScene from '../../components/3d/FloatingFoodSpaceScene';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -22,7 +21,22 @@ export const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   // Seamless Instant Demo Login (Works 100% offline or on Netlify)
-  const performDemoLogin = (role: string, name: string, userEmail: string) => {
+  const performDemoLogin = async (role: string, name: string, userEmail: string) => {
+    try {
+      const data = await authApi.login(userEmail, '123456');
+      if (data && data.accessToken) {
+        login(data.user, data.accessToken, data.refreshToken);
+        toast.success(`Welcome ${name}! (${role})`);
+        if (role === 'SUPER_ADMIN' || role === 'ADMIN') navigate('/admin');
+        else if (role === 'WAITER') navigate('/waiter');
+        else if (role === 'KITCHEN') navigate('/kitchen');
+        else navigate('/menu');
+        return;
+      }
+    } catch (_) {
+      // Seamless fallback to demo token
+    }
+
     const mockUser = {
       id: `demo-${role.toLowerCase()}-${Date.now()}`,
       email: userEmail,
@@ -31,7 +45,7 @@ export const LoginPage = () => {
       isVerified: true,
       avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
     };
-    const mockToken = `demo-token-${Date.now()}`;
+    const mockToken = `demo-${role.toLowerCase()}-token-${Date.now()}`;
     login(mockUser, mockToken, mockToken);
     toast.success(`Welcome ${name}! (${role})`);
 
@@ -153,8 +167,34 @@ export const LoginPage = () => {
                 </span>
               </div>
 
-              {/* Real Interactive 3D Zero-Gravity Floating Space Feast */}
-              <FloatingFoodSpaceScene />
+              {/* Main Cutout Food Feast Visual with Floating Badges */}
+              <div className="relative w-full max-w-[460px] my-2 group">
+                <div className="absolute inset-0 bg-gradient-to-t from-orange-600/20 to-transparent rounded-3xl blur-2xl transform group-hover:scale-105 transition-transform duration-500" />
+                
+                <img
+                  src="/images/food-feast-hero.jpg"
+                  alt="Delicious Food Feast"
+                  className="w-full h-auto rounded-2xl object-cover shadow-2xl border border-white/10 transform transition-all duration-500 group-hover:scale-[1.02] group-hover:-translate-y-1"
+                />
+
+                {/* Floating Badge 1 - Top Pick */}
+                <div className="absolute top-3 -left-2 sm:-left-4 bg-[#181a20]/90 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-2xl shadow-xl flex items-center gap-2 animate-bounce" style={{ animationDuration: '4s' }}>
+                  <span className="text-base">🍔</span>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black text-white leading-none">Double Angus Burger</p>
+                    <p className="text-[9px] text-orange-400 font-bold">Chef's Signature</p>
+                  </div>
+                </div>
+
+                {/* Floating Badge 2 - Fresh Daily */}
+                <div className="absolute bottom-4 -right-2 sm:-right-4 bg-[#181a20]/90 backdrop-blur-md border border-white/15 px-3 py-1.5 rounded-2xl shadow-xl flex items-center gap-2 animate-bounce" style={{ animationDuration: '3.5s', animationDelay: '0.5s' }}>
+                  <span className="text-base">🍕</span>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black text-white leading-none">Wood-Fired Pizza</p>
+                    <p className="text-[9px] text-amber-400 font-bold">100% Fresh Daily</p>
+                  </div>
+                </div>
+              </div>
 
               <p className="text-xs text-gray-400 max-w-sm mt-3 font-medium">
                 Experience smart contactless dine-in, real-time 3D meal inspection, and gourmet delicacies at your fingertips.

@@ -16,8 +16,9 @@ const Sidebar = () => {
   const { user, logout } = useAuthStore();
 
   const navItems = [
-    { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/admin/dashboard' },
-    { icon: <Store size={20} />, label: 'Restaurants', path: '/admin/restaurants' },
+    { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/admin' },
+    { icon: <UtensilsCrossed size={20} />, label: 'Menu Management', path: '/admin/menu' },
+    { icon: <Store size={20} />, label: 'Tables & Floor', path: '/admin/tables' },
     { icon: <Users size={20} />, label: 'User Management', path: '/admin/users' },
     { icon: <Settings size={20} />, label: 'Global Settings', path: '/admin/settings' },
     { icon: <CreditCard size={20} />, label: 'Billing & Subs', path: '/admin/billing' },
