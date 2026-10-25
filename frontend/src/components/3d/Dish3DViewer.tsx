@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { MenuItem } from '../../types';
-import { RotateCw, Flame, Sparkles, Box, Eye, X } from 'lucide-react';
+import { RotateCw, Flame, Sparkles, Box, Eye, X, Camera, Image as ImageIcon } from 'lucide-react';
+import { getPhotoUrl } from '../../utils/photoUrl';
 
 interface Dish3DViewerProps {
   item: MenuItem;
@@ -11,6 +12,12 @@ interface Dish3DViewerProps {
 
 export const Dish3DViewer: React.FC<Dish3DViewerProps> = ({ item, onClose, inline = false }) => {
   const mountRef = useRef<HTMLDivElement>(null);
+  
+  // Extract real photo URL if available
+  const rawPhoto = item.photos?.find(p => p.isPrimary)?.url || item.photos?.[0]?.url;
+  const photoUrl = getPhotoUrl(rawPhoto);
+
+  const [displayMode, setDisplayMode] = useState<'photo' | 'model'>(photoUrl ? 'photo' : 'model');
   const [isRotating, setIsRotating] = useState(true);
   const [steamEnabled, setSteamEnabled] = useState(true);
   const [isWireframe, setIsWireframe] = useState(false);
@@ -100,7 +107,89 @@ export const Dish3DViewer: React.FC<Dish3DViewerProps> = ({ item, onClose, inlin
     const itemName = (item.name || '').toLowerCase();
     const itemCat = (item.category?.name || '').toLowerCase();
 
-    if (itemName.includes('burger') || itemCat.includes('burger')) {
+    if (displayMode === 'photo' && photoUrl) {
+      // 3D REAL DISH PHOTO PRESENTATION (Actual food image rotating in 3D with luxury turntable platter)
+      const textureLoader = new THREE.TextureLoader();
+      textureLoader.setCrossOrigin('anonymous');
+
+      const photoTexture = textureLoader.load(photoUrl);
+      photoTexture.colorSpace = THREE.SRGBColorSpace;
+      photoTexture.generateMipmaps = true;
+      photoTexture.minFilter = THREE.LinearMipmapLinearFilter;
+
+      // Outer gold bevel accent on plate
+      const goldBevelGeo = new THREE.TorusGeometry(1.9, 0.04, 16, 64);
+      const goldBevelMat = new THREE.MeshStandardMaterial({
+        color: 0xd4af37,
+        metalness: 0.92,
+        roughness: 0.15,
+      });
+      const goldBevel = new THREE.Mesh(goldBevelGeo, goldBevelMat);
+      goldBevel.rotation.x = Math.PI / 2;
+      goldBevel.position.y = 0.16;
+      foodGroup.add(goldBevel);
+      itemMaterials.push(goldBevelMat);
+
+      // Elevated turntable food disc with the actual dish photograph
+      const discRadius = 1.75;
+      const discHeight = 0.12;
+      const discGeo = new THREE.CylinderGeometry(discRadius, discRadius * 0.95, discHeight, 64);
+
+      // Cylinder materials: [0: sides, 1: top photo, 2: bottom]
+      const discSideMat = new THREE.MeshStandardMaterial({
+        color: 0xc49b38,
+        metalness: 0.85,
+        roughness: 0.25,
+      });
+
+      const photoTopMat = new THREE.MeshPhysicalMaterial({
+        map: photoTexture,
+        roughness: 0.15,
+        metalness: 0.02,
+        clearcoat: 0.95,
+        clearcoatRoughness: 0.1,
+        reflectivity: 0.85,
+      });
+
+      const discBottomMat = new THREE.MeshStandardMaterial({
+        color: 0x181a20,
+        roughness: 0.6,
+      });
+
+      const photoDisc = new THREE.Mesh(discGeo, [discSideMat, photoTopMat, discBottomMat]);
+      photoDisc.position.y = 0.22;
+      photoDisc.castShadow = true;
+      photoDisc.receiveShadow = true;
+      foodGroup.add(photoDisc);
+      itemMaterials.push(discSideMat, photoTopMat, discBottomMat);
+
+      // Warm amber under-glow ring beneath the platter
+      const glowRingGeo = new THREE.TorusGeometry(1.6, 0.025, 16, 64);
+      const glowRingMat = new THREE.MeshBasicMaterial({
+        color: 0xf59e0b,
+      });
+      const glowRing = new THREE.Mesh(glowRingGeo, glowRingMat);
+      glowRing.rotation.x = Math.PI / 2;
+      glowRing.position.y = 0.155;
+      foodGroup.add(glowRing);
+
+      // Subtle curved gourmet protective glass dome
+      const glassDomeGeo = new THREE.SphereGeometry(discRadius * 0.99, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.12);
+      const glassDomeMat = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.18,
+        roughness: 0.05,
+        transmission: 0.92,
+        ior: 1.48,
+        clearcoat: 1.0,
+      });
+      const glassDome = new THREE.Mesh(glassDomeGeo, glassDomeMat);
+      glassDome.position.y = 0.25;
+      foodGroup.add(glassDome);
+      itemMaterials.push(glassDomeMat);
+
+    } else if (itemName.includes('burger') || itemCat.includes('burger')) {
       // 3D BURGER MODEL
       // Bottom Bun
       const bBunGeo = new THREE.CylinderGeometry(1.05, 0.95, 0.28, 32);
@@ -659,6 +748,50 @@ export const Dish3DViewer: React.FC<Dish3DViewerProps> = ({ item, onClose, inlin
       });
       itemMaterials.push(tamMat);
 
+    } else if (itemName.includes('rasmalai') || itemName.includes('ras malai')) {
+      // 3D CHILLED RASMALAI - Porcelain bowl with chilled saffron cream & soft white patties
+      const bowlGeo = new THREE.SphereGeometry(1.4, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.55);
+      const bowlMat = new THREE.MeshStandardMaterial({ color: 0xFDFBF7, roughness: 0.2, metalness: 0.1 });
+      const bowl = new THREE.Mesh(bowlGeo, bowlMat);
+      bowl.rotation.x = Math.PI;
+      bowl.position.y = 0.62;
+      bowl.scale.set(1, 0.5, 1);
+      bowl.castShadow = true;
+      foodGroup.add(bowl);
+      itemMaterials.push(bowlMat);
+
+      // Golden saffron milk (Rabdi)
+      const saffronMat = new THREE.MeshPhysicalMaterial({ color: 0xFFD24C, roughness: 0.15, clearcoat: 0.8, transparent: true, opacity: 0.9 });
+      const saffronGeo = new THREE.SphereGeometry(1.32, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.48);
+      const saffron = new THREE.Mesh(saffronGeo, saffronMat);
+      saffron.rotation.x = Math.PI;
+      saffron.position.y = 0.64;
+      saffron.scale.set(1, 0.47, 1);
+      foodGroup.add(saffron);
+      itemMaterials.push(saffronMat);
+
+      // Soft white Rasmalai patties (flattened disks)
+      const rasmalaiMat = new THREE.MeshPhysicalMaterial({ color: 0xFFFFF2, roughness: 0.5, clearcoat: 0.3 });
+      itemMaterials.push(rasmalaiMat);
+      [[-0.35, 0.76, 0.1], [0.35, 0.77, -0.1]].forEach(([x, y, z]) => {
+        const rGeo = new THREE.CylinderGeometry(0.55, 0.52, 0.22, 24);
+        const rPatty = new THREE.Mesh(rGeo, rasmalaiMat);
+        rPatty.position.set(x, y, z);
+        rPatty.rotation.set(0.1, Math.random(), 0.05);
+        rPatty.castShadow = true;
+        foodGroup.add(rPatty);
+      });
+
+      // Saffron strands & pistachio flakes
+      const pistachioMat = new THREE.MeshStandardMaterial({ color: 0x76B947, roughness: 0.4 });
+      const saffronStrandMat = new THREE.MeshStandardMaterial({ color: 0xDC2626, roughness: 0.3 });
+      itemMaterials.push(pistachioMat, saffronStrandMat);
+      for (let i = 0; i < 6; i++) {
+        const flake = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.08), pistachioMat);
+        flake.position.set((Math.random() - 0.5) * 0.8, 0.88, (Math.random() - 0.5) * 0.8);
+        foodGroup.add(flake);
+      }
+
     } else if (itemName.includes('dessert') || itemName.includes('gulab') || itemName.includes('kheer') || itemName.includes('halwa') || itemName.includes('barfi') || itemName.includes('ladoo') || itemName.includes('ice cream') || itemCat.includes('dessert')) {
       // 3D INDIAN DESSERT - Gulab Jamun in a bowl
       const bowlGeo = new THREE.SphereGeometry(1.4, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.55);
@@ -936,7 +1069,7 @@ export const Dish3DViewer: React.FC<Dish3DViewerProps> = ({ item, onClose, inlin
       particleGeo.dispose();
       particleMat.dispose();
     };
-  }, [item, isRotating, steamEnabled, inline]);
+  }, [item, isRotating, steamEnabled, inline, displayMode]);
 
   // Handle wireframe toggle
   useEffect(() => {
@@ -978,7 +1111,7 @@ export const Dish3DViewer: React.FC<Dish3DViewerProps> = ({ item, onClose, inlin
       <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none">
         <span className="px-2.5 py-1 bg-orange-600/90 backdrop-blur-md text-white text-[11px] font-black rounded-lg uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-orange-900/30">
           <Sparkles size={12} className="text-yellow-300 animate-spin" />
-          Interactive 3D Dish
+          {displayMode === 'photo' ? 'Photoreal 3D Dish' : 'Interactive 3D Mesh'}
         </span>
         <span className="hidden sm:inline-block px-2 py-1 bg-black/50 backdrop-blur-sm text-gray-300 text-[10px] rounded-md font-medium">
           Drag to Rotate • Pinch to Zoom
@@ -997,7 +1130,23 @@ export const Dish3DViewer: React.FC<Dish3DViewerProps> = ({ item, onClose, inlin
       )}
 
       {/* Mobile-Friendly Control Toolbar */}
-      <div className="w-full flex items-center justify-between px-3 py-2 mt-2 bg-gray-900/90 backdrop-blur-md rounded-xl text-white text-xs gap-2 border border-gray-800">
+      <div className="w-full flex items-center justify-between px-3 py-2 mt-2 bg-gray-900/90 backdrop-blur-md rounded-xl text-white text-xs gap-2 border border-gray-800 flex-wrap">
+        {/* Toggle Real Photo vs 3D Mesh */}
+        {photoUrl && (
+          <button
+            onClick={() => setDisplayMode(displayMode === 'photo' ? 'model' : 'photo')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all active:scale-95 ${
+              displayMode === 'photo'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold shadow-md shadow-orange-600/30'
+                : 'bg-gray-800/80 text-gray-300 hover:text-white'
+            }`}
+            title="Toggle between Real Food Photo 3D and Geometric Model"
+          >
+            <Camera size={13} />
+            <span>{displayMode === 'photo' ? 'Photo 3D' : 'Mesh 3D'}</span>
+          </button>
+        )}
+
         {/* Turntable Auto Spin */}
         <button
           onClick={() => setIsRotating(!isRotating)}
