@@ -124,7 +124,7 @@ export const createMenuItem = async (data: any) => {
   const { categoryId, name, description, price, isChefRecommended, status, prepTime } =
     data;
 
-  return await prisma.menuItem.create({
+  const item = await prisma.menuItem.create({
     data: {
       categoryId,
       name,
@@ -135,11 +135,13 @@ export const createMenuItem = async (data: any) => {
       status: status || MenuItemStatus.AVAILABLE,
     },
   });
+  await redisService.invalidateMenuCache();
+  return item;
 };
 
 //update menu item
 export const updateMenuItem = async (id: string, data: any) => {
-  return await prisma.menuItem.update({
+  const updated = await prisma.menuItem.update({
     where: {
       id,
     },
@@ -147,6 +149,8 @@ export const updateMenuItem = async (id: string, data: any) => {
       ...data,
     },
   });
+  await redisService.invalidateMenuCache();
+  return updated;
 };
 
 //delete menu item
@@ -173,7 +177,7 @@ export const deleteMenuItem = async (id: string) => {
   }
 
   // 2. Manual Cascade Delete in Transaction
-  return await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     // A. Delete Modifier Options (via Modifier Groups)
     const groups = await tx.modifierGroup.findMany({
       where: { menuItemId: id },
@@ -200,10 +204,14 @@ export const deleteMenuItem = async (id: string) => {
     });
 
     // D. Delete the Item itself
-    return await tx.menuItem.delete({
+    const deleted = await tx.menuItem.delete({
       where: { id },
     });
+    return deleted;
   });
+
+  await redisService.invalidateMenuCache();
+  return result;
 };
 
 //get menu items by category id

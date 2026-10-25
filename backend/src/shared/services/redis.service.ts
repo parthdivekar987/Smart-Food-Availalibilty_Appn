@@ -197,6 +197,8 @@ class RedisService {
    * 3. Menu & Category Invalidation
    */
   async invalidateMenuCache() {
+    await this.delPattern("cache:route:*menu*");
+    await this.delPattern("cache:route:*categor*");
     await this.delPattern("cache:menu:*");
     console.log("🧹 Redis: Invalidated menu and category cache");
   }

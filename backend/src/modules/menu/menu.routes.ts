@@ -4,6 +4,7 @@ import { Router } from "express";
 import { authMiddleware, roleGuard } from "../auth/auth.middleware";
 import { Role } from "@prisma/client";
 import { upload } from "../../middleware/upload";
+import { redisService } from "../../shared/services/redis.service";
 
 export const menuRouter = Router();
 
@@ -20,7 +21,7 @@ menuRouter.patch(
   roleGuard([Role.ADMIN, Role.SUPER_ADMIN]),
   menuController.updateCategory
 );
-menuRouter.get("/categories", menuController.getCategories);
+menuRouter.get("/categories", redisService.routeCache(120), menuController.getCategories);
 menuRouter.get("/categories/:id", menuController.getCategoryById);
 menuRouter.delete(
   "/categories/:id",
@@ -29,8 +30,8 @@ menuRouter.delete(
 );
 
 // ==================== MENU ITEM ROUTES ====================
-// Get all menu items (with pagination, filter, search)
-menuRouter.get("/", menuController.getMenuItems);
+// Get all menu items (with pagination, filter, search, high-speed cache)
+menuRouter.get("/", redisService.routeCache(120), menuController.getMenuItems);
 
 // Get menu items by category
 menuRouter.get(

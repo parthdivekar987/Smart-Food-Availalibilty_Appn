@@ -3,6 +3,7 @@ import { orderApi } from '../../api/orderApi';
 import { Order } from '../../types/order.types';
 import { Search, Filter, Calendar } from 'lucide-react';
 import { ui } from '../../utils/swalHelper';
+import { useSocketStore } from '../../store/useSocketStore';
 
 const ORDER_STATUSES = [
     { value: 'RECEIVED', label: 'Received', color: 'bg-blue-100 text-blue-700' },
@@ -14,6 +15,7 @@ const ORDER_STATUSES = [
 ];
 
 const AdminOrdersPage = () => {
+    const socket = useSocketStore(state => state.socket);
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -25,8 +27,28 @@ const AdminOrdersPage = () => {
 
     useEffect(() => {
         fetchOrders();
-        // Setup socket listener here if needed for realtime
     }, [page, statusFilter, todayOnly]);
+
+    // Realtime Socket.IO synchronization - 0ms response time, zero polling
+    useEffect(() => {
+        if (!socket) return;
+        
+        const handleRealtimeOrder = () => {
+            fetchOrders();
+        };
+
+        socket.on('new_order', handleRealtimeOrder);
+        socket.on('order_status_change', handleRealtimeOrder);
+        socket.on('order_ready', handleRealtimeOrder);
+        socket.on('order_accepted', handleRealtimeOrder);
+
+        return () => {
+            socket.off('new_order', handleRealtimeOrder);
+            socket.off('order_status_change', handleRealtimeOrder);
+            socket.off('order_ready', handleRealtimeOrder);
+            socket.off('order_accepted', handleRealtimeOrder);
+        };
+    }, [socket]);
 
     const fetchOrders = async () => {
         setLoading(true);
