@@ -5,7 +5,8 @@ import { useSessionStore } from '../store/useSessionStore';
 import { guestApi } from '../api/guestApi';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, ShoppingBag, ChefHat, X, Minus, Plus, FileText, Sparkles, ArrowRight } from 'lucide-react';
+import { Trash2, ShoppingBag, ChefHat, X, Minus, Plus, FileText, Sparkles, ArrowRight, Utensils } from 'lucide-react';
+import { getPhotoUrl } from '../utils/photoUrl';
 
 export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { items, totalAmount, clearCart, updateQuantity, removeFromCart } = useCartStore();
@@ -146,54 +147,87 @@ export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClos
                   </motion.div>
                 ) : (
                   <AnimatePresence initial={false}>
-                    {items.map((item) => (
-                      <motion.div
-                        key={item.cartItemId}
-                        layout
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 20, height: 0, marginBottom: 0 }}
-                        className="bg-gray-50 rounded-2xl p-3 border border-gray-100"
-                      >
-                        <div className="flex justify-between items-start mb-2.5">
-                          <div className="flex-1 mr-3">
-                            <p className="font-bold text-gray-900 text-sm leading-tight">{item.name}</p>
-                            {Object.values(item.selectedModifiers || {}).flat().length > 0 && (
-                              <p className="text-[10px] text-gray-400 mt-0.5 italic">
-                                {Object.values(item.selectedModifiers || {}).flat().map((o: any) => o.name).join(', ')}
-                              </p>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => removeFromCart(item.cartItemId)}
-                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all active:scale-90"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                    {items.map((item) => {
+                      const itemPhoto = getPhotoUrl(
+                        item.photos?.find((p: any) => p.isPrimary)?.url ||
+                        item.photos?.[0]?.url ||
+                        (item as any).photoUrl ||
+                        (item as any).image
+                      );
 
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 p-1">
-                            <button
-                              onClick={() => updateQuantity(item.cartItemId, -1)}
-                              className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center active:scale-90 transition-all"
-                            >
-                              <Minus size={12} className="text-gray-700" />
-                            </button>
-                            <span className="w-5 text-center text-sm font-bold text-gray-900">{item.quantity}</span>
-                            <button
-                              onClick={() => updateQuantity(item.cartItemId, 1)}
-                              className="w-7 h-7 rounded-lg bg-orange-500 hover:bg-orange-600 flex items-center justify-center active:scale-90 transition-all"
-                            >
-                              <Plus size={12} className="text-white" />
-                            </button>
+                      return (
+                        <motion.div
+                          key={item.cartItemId}
+                          layout
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 20, height: 0, marginBottom: 0 }}
+                          className="bg-gray-50 hover:bg-gray-100/70 rounded-2xl p-3 border border-gray-100 transition-colors"
+                        >
+                          <div className="flex gap-3 items-center">
+                            {/* Food Item Image Thumbnail */}
+                            <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl overflow-hidden bg-gray-200 shrink-0 border border-black/5 shadow-inner relative group">
+                              {itemPhoto ? (
+                                <img
+                                  src={itemPhoto}
+                                  alt={item.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-orange-50 text-orange-400">
+                                  <Utensils size={20} />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Details & Controls */}
+                            <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-bold text-gray-900 text-sm leading-snug line-clamp-2">{item.name}</p>
+                                  {Object.values(item.selectedModifiers || {}).flat().length > 0 && (
+                                    <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1 italic">
+                                      {Object.values(item.selectedModifiers || {}).flat().map((o: any) => o.name).join(', ')}
+                                    </p>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => removeFromCart(item.cartItemId)}
+                                  className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all active:scale-90 shrink-0"
+                                  title="Remove item"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+
+                              <div className="flex justify-between items-center mt-2.5">
+                                <div className="flex items-center gap-1.5 bg-white rounded-xl border border-gray-200 p-0.5 shadow-sm">
+                                  <button
+                                    onClick={() => updateQuantity(item.cartItemId, -1)}
+                                    className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center active:scale-90 transition-all"
+                                  >
+                                    <Minus size={12} className="text-gray-700" />
+                                  </button>
+                                  <span className="w-5 text-center text-xs font-bold text-gray-900">{item.quantity}</span>
+                                  <button
+                                    onClick={() => updateQuantity(item.cartItemId, 1)}
+                                    className="w-6 h-6 rounded-lg bg-orange-500 hover:bg-orange-600 flex items-center justify-center active:scale-90 transition-all shadow-sm"
+                                  >
+                                    <Plus size={12} className="text-white" />
+                                  </button>
+                                </div>
+                                <span className="font-black text-sm sm:text-base text-gray-900">
+                                  {(item.totalPrice * item.quantity).toLocaleString('vi-VN')}đ
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                          <span className="font-bold text-gray-900 text-sm">
-                            {(item.totalPrice * item.quantity).toLocaleString('vi-VN')}đ
-                          </span>
-                        </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      );
+                    })}
                   </AnimatePresence>
                 )}
               </div>
