@@ -9,15 +9,16 @@ import MoMoPaymentModal from '../../components/payment/MoMoPaymentModal';
 import StripePaymentModal from '../../components/payment/StripePaymentModal';
 import {
   ChefHat, CheckCircle2, Clock, Utensils, BadgeCheck, ArrowLeft,
-  UtensilsCrossed, CreditCard, Banknote, Bell, Info, RefreshCw
+  UtensilsCrossed, CreditCard, Banknote, Bell, Info, RefreshCw, Sparkles, Timer
 } from 'lucide-react';
 import AndroidBottomNav from '../../components/mobile/AndroidBottomNav';
+import { getPhotoUrl } from '../../utils/photoUrl';
 
 interface OrderItem {
   id: string;
   quantity: number;
   price: number;
-  menuItem: { name: string; price: number };
+  menuItem: { name: string; price: number; photos?: { url: string }[] };
   modifiers: any[];
   status: string;
 }
@@ -28,7 +29,10 @@ interface Order {
   totalAmount: number;
   items: OrderItem[];
   billRequested: boolean;
-  tableSession: { table: { name: string } };
+  tableSession?: { table?: { name?: string } };
+  estimatedPrepMinutes?: number;
+  estimatedReadyAt?: string;
+  createdAt?: string;
 }
 
 const STATUS_STEPS = [
@@ -75,23 +79,42 @@ const getStatusIndex = (status: string) => {
 };
 
 const OrderTrackingPage = () => {
-  const { sessionId } = useSessionStore();
+  const { sessionId, activeOrderId, lastOrder, setActiveOrder, updateActiveOrderStatus } = useSessionStore();
   const socket = useSocketStore(state => state.socket);
   const joinRoom = useSocketStore(state => state.joinRoom);
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [order, setOrder] = useState<Order | null>(lastOrder || null);
+  const [loading, setLoading] = useState(!lastOrder);
   const [requestingBill, setRequestingBill] = useState(false);
   const [showMoMoModal, setShowMoMoModal] = useState(false);
   const [showStripeModal, setShowStripeModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchOrder = async () => {
-    if (!sessionId) return;
     try {
-      const res = await guestApi.getOrderDetails(sessionId);
-      setOrder(res as any);
+      if (sessionId) {
+        const res: any = await guestApi.getOrderDetails(sessionId);
+        if (res && res.id) {
+          setOrder(res);
+          setActiveOrder(res);
+          return;
+        }
+      }
+      if (activeOrderId) {
+        const res: any = await guestApi.getOrderDetails(activeOrderId);
+        if (res && res.id) {
+          setOrder(res);
+          setActiveOrder(res);
+          return;
+        }
+      }
+      if (lastOrder) {
+        setOrder(lastOrder);
+      }
     } catch (err) {
-      console.error(err);
+      console.warn("Backend order fetch fallback to cached active order:", err);
+      if (lastOrder) {
+        setOrder(lastOrder);
+      }
     } finally {
       setLoading(false);
     }
@@ -111,24 +134,57 @@ const OrderTrackingPage = () => {
 
   useEffect(() => {
     if (!socket) return;
-    const onReady = () => { toast.success('🍽️ Your order is ready!', { duration: 5000 }); fetchOrder(); };
-    const onServed = () => { toast.success('✅ Your order has been served!', { duration: 5000 }); fetchOrder(); };
-    const onStatus = () => fetchOrder();
+    const onReady = () => {
+      toast.success('🍽️ Your order is ready!', { duration: 5000 });
+      setOrder(prev => prev ? { ...prev, status: 'READY', estimatedPrepMinutes: 0 } : prev);
+      updateActiveOrderStatus('READY', 0);
+      fetchOrder();
+    };
+
+    const onServed = () => {
+      toast.success('✅ Your order has been served!', { duration: 5000 });
+      setOrder(prev => prev ? { ...prev, status: 'SERVED', estimatedPrepMinutes: 0 } : prev);
+      updateActiveOrderStatus('SERVED', 0);
+      fetchOrder();
+    };
+
+    const onStatus = (data: any) => {
+      const newStatus = data?.status || data;
+      setOrder(prev => prev ? { ...prev, status: newStatus } : prev);
+      updateActiveOrderStatus(newStatus);
+      fetchOrder();
+    };
+
+    const onEstimateUpdate = (data: any) => {
+      if (data?.estimatedPrepMinutes !== undefined) {
+        toast.success(`⏱️ Kitchen updated prep time: ~${data.estimatedPrepMinutes} mins remaining!`, { icon: '⏳' });
+        setOrder(prev => prev ? {
+          ...prev,
+          estimatedPrepMinutes: data.estimatedPrepMinutes,
+          estimatedReadyAt: data.estimatedReadyAt
+        } : prev);
+        updateActiveOrderStatus(order?.status || 'PREPARING', data.estimatedPrepMinutes, data.estimatedReadyAt);
+      }
+    };
+
     socket.on('order_ready', onReady);
     socket.on('order_served', onServed);
     socket.on('order_status_change', onStatus);
+    socket.on('order_estimate_updated', onEstimateUpdate);
+
     return () => {
       socket.off('order_ready', onReady);
       socket.off('order_served', onServed);
       socket.off('order_status_change', onStatus);
+      socket.off('order_estimate_updated', onEstimateUpdate);
     };
-  }, [socket]);
+  }, [socket, order?.status]);
 
   useEffect(() => {
     fetchOrder();
-    const interval = setInterval(fetchOrder, 30000);
+    const interval = setInterval(fetchOrder, 20000);
     return () => clearInterval(interval);
-  }, [sessionId]);
+  }, [sessionId, activeOrderId]);
 
   const handleRequestBill = async () => {
     if (!order) return;
@@ -249,6 +305,41 @@ const OrderTrackingPage = () => {
         </motion.div>
       </div>
 
+      {/* Dynamic Estimated Preparation Time Card (Live sync with Redis & Kitchen/Waiter) */}
+      <div className="px-4 mb-4">
+        <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/15 to-amber-500/10 border border-orange-500/30 rounded-2xl p-4 shadow-sm backdrop-blur-md flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/30">
+              <Clock size={22} className="animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-black uppercase tracking-wider text-gray-900 flex items-center gap-1.5">
+                  Live Kitchen Estimate
+                  <Sparkles size={13} className="text-amber-500" />
+                </h4>
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 border border-emerald-500/30 animate-pulse">
+                  Redis Live
+                </span>
+              </div>
+              <p className="text-xs text-orange-800 font-bold mt-0.5">
+                {order.status === 'READY' || order.status === 'SERVED' || order.status === 'COMPLETED' ? (
+                  <span className="text-emerald-700 font-black">Food is Ready! Waiter is serving your table</span>
+                ) : (
+                  <span>~{order.estimatedPrepMinutes || 18} mins remaining · Managed in real-time</span>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <span className="text-2xl font-black text-orange-600 block leading-tight">
+              {order.status === 'READY' || order.status === 'SERVED' || order.status === 'COMPLETED' ? '0m' : `${order.estimatedPrepMinutes || 18}m`}
+            </span>
+            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Est. Time</span>
+          </div>
+        </div>
+      </div>
+
       {/* Progress Steps */}
       <div className="px-4 mb-4">
         <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
@@ -316,22 +407,45 @@ const OrderTrackingPage = () => {
         </div>
       </div>
 
-      {/* Order Items */}
+      {/* Order Items with Photos & Quantities */}
       <div className="px-4 mb-4">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-            <UtensilsCrossed size={16} className="text-orange-500" />
-            <h3 className="font-black text-gray-900 text-sm">Order Items</h3>
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UtensilsCrossed size={16} className="text-orange-500" />
+              <h3 className="font-black text-gray-900 text-sm">Ordered Dishes</h3>
+            </div>
+            <span className="text-xs font-bold text-gray-400">{order.items?.length || 0} items</span>
           </div>
-          <div className="p-4 space-y-3">
+          <div className="p-4 space-y-3.5">
             {order.items.map((item) => {
               const modifierString = item.modifiers?.map((m: any) => m.modifierOption?.name || m.name).filter(Boolean).join(', ') || '';
               const isCancelled = item.status === 'CANCELLED';
+              const photoUrl = getPhotoUrl(item.menuItem?.photos?.[0]?.url);
+
               return (
-                <div key={item.id} className={`flex items-start gap-3 ${isCancelled ? 'opacity-50' : ''}`}>
-                  <div className="w-8 h-8 bg-orange-100 rounded-xl flex items-center justify-center flex-shrink-0 text-base font-bold text-orange-600">
-                    ×{item.quantity}
+                <div key={item.id} className={`flex items-center gap-3 ${isCancelled ? 'opacity-50' : ''}`}>
+                  {/* Food Photo Thumbnail or Quantity badge */}
+                  <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-orange-100 flex-shrink-0 border border-gray-100 shadow-sm">
+                    {photoUrl ? (
+                      <img
+                        src={photoUrl}
+                        alt={item.menuItem.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-orange-600 font-black text-xs">
+                        {item.menuItem.name.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="absolute bottom-0 right-0 bg-orange-600 text-white font-black text-[9px] px-1 rounded-tl-md">
+                      ×{item.quantity}
+                    </span>
                   </div>
+
                   <div className="flex-1 min-w-0">
                     <p className={`font-bold text-sm text-gray-900 ${isCancelled ? 'line-through' : ''}`}>
                       {item.menuItem.name}
@@ -349,7 +463,7 @@ const OrderTrackingPage = () => {
             })}
           </div>
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
-            <span className="font-bold text-gray-600 text-sm">Total</span>
+            <span className="font-bold text-gray-600 text-sm">Total Amount</span>
             <span className="text-xl font-black text-gray-900">{order.totalAmount.toLocaleString('vi-VN')}đ</span>
           </div>
         </div>

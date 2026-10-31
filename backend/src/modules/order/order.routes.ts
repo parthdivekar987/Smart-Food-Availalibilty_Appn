@@ -31,6 +31,13 @@ router.patch(
     OrderController.updateOrderStatus
 );
 
+// Update Estimated Preparation Time - Manager/Waiter/Kitchen
+router.patch(
+    "/:id/estimate",
+    roleGuard([Role.ADMIN, Role.SUPER_ADMIN, Role.WAITER, Role.KITCHEN]),
+    OrderController.updateOrderEstimate
+);
+
 // Update Order Items Status - Waiter
 router.patch(
     "/:id/items",

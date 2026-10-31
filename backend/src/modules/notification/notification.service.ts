@@ -201,6 +201,55 @@ export const notifyOrderStatusChange = (data: {
   });
 };
 
+/**
+ * Notify customer and staff when estimated prep time is updated
+ */
+export const notifyOrderEstimateUpdated = (data: {
+  orderId: string;
+  tableSessionId: string;
+  estimatedPrepMinutes: number;
+  estimatedReadyAt: string;
+  note?: string;
+}) => {
+  if (!io) {
+    console.warn('Socket.IO not initialized');
+    return;
+  }
+
+  console.log('📢 Emitting order_estimate_updated to session:', data.tableSessionId, `${data.estimatedPrepMinutes}m`);
+
+  io.to(`session_${data.tableSessionId}`).emit('order_estimate_updated', {
+    type: 'ORDER_ESTIMATE_UPDATED',
+    ...data,
+    timestamp: new Date().toISOString(),
+  });
+
+  io.to(rooms.WAITER).emit('order_estimate_updated', {
+    type: 'ORDER_ESTIMATE_UPDATED',
+    ...data,
+    timestamp: new Date().toISOString(),
+  });
+
+  io.to(rooms.ADMIN).emit('order_estimate_updated', {
+    type: 'ORDER_ESTIMATE_UPDATED',
+    ...data,
+    timestamp: new Date().toISOString(),
+  });
+
+  io.to(rooms.KITCHEN).emit('order_estimate_updated', {
+    type: 'ORDER_ESTIMATE_UPDATED',
+    ...data,
+    timestamp: new Date().toISOString(),
+  });
+
+  // Global broadcast so guest page always receives updates
+  io.emit('order_estimate_updated', {
+    type: 'ORDER_ESTIMATE_UPDATED',
+    ...data,
+    timestamp: new Date().toISOString(),
+  });
+};
+
 export default {
   initializeNotificationService,
   notifyNewOrder,
@@ -208,4 +257,5 @@ export default {
   notifyOrderReady,
   notifyOrderServed,
   notifyOrderStatusChange,
+  notifyOrderEstimateUpdated,
 };

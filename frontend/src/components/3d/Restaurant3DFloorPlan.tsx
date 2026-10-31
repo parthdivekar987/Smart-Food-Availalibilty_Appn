@@ -117,7 +117,7 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
   const mountRef = useRef<HTMLDivElement>(null);
   const [hoveredTable, setHoveredTable] = useState<Table | null>(null);
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
-  const [cameraView, setCameraView] = useState<'iso' | 'top' | 'walk'>('iso');
+  const [cameraView, setCameraView] = useState<'iso' | 'mezzanine' | 'bar' | 'vip' | 'top' | 'walk'>('iso');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'AVAILABLE' | 'OCCUPIED'>('ALL');
 
   // Fallback tables if empty
@@ -503,18 +503,28 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
     renderer.domElement.addEventListener('click', handlePointerDown);
     renderer.domElement.addEventListener('mousemove', handlePointerMove);
 
-    // Camera Views
-    const targetPos = new THREE.Vector3(0, 13, 17);
+    // Camera Views - Realistic Architectural Perspectives
+    const targetPos = new THREE.Vector3(0, 14, 18);
     const targetLook = new THREE.Vector3(0, 0.5, 0);
 
     if (cameraView === 'top') {
-      targetPos.set(0, 22, 0.1);
+      targetPos.set(0, 24, 0.1);
       targetLook.set(0, 0, 0);
+    } else if (cameraView === 'mezzanine') {
+      targetPos.set(-10, 11, 15);
+      targetLook.set(1.5, 0.8, -2);
+    } else if (cameraView === 'bar') {
+      targetPos.set(6.5, 3.2, -6);
+      targetLook.set(-2, 1.2, -10.5);
+    } else if (cameraView === 'vip') {
+      targetPos.set(-5, 2.8, 3.5);
+      targetLook.set(0, 1.2, -3);
     } else if (cameraView === 'walk') {
-      targetPos.set(0, 3.2, 11);
-      targetLook.set(0, 1.8, -4);
+      targetPos.set(0, 3.2, 12);
+      targetLook.set(0, 1.6, -4);
     } else {
-      targetPos.set(0, 13, 17);
+      // Isometric Default
+      targetPos.set(0, 14, 18);
       targetLook.set(0, 0.5, 0);
     }
 
@@ -621,7 +631,7 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
             </span>
           </div>
 
-          <div className="bg-[#111827]/90 backdrop-blur-md p-1 rounded-xl border border-white/10 flex items-center gap-1">
+          <div className="bg-[#111827]/90 backdrop-blur-md p-1 rounded-xl border border-white/10 flex flex-wrap items-center gap-1">
             <button
               onClick={() => setCameraView('iso')}
               className={`px-2.5 py-1 rounded-lg text-xs font-black transition-colors ${
@@ -629,6 +639,30 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
               }`}
             >
               Isometric
+            </button>
+            <button
+              onClick={() => setCameraView('mezzanine')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-black transition-colors ${
+                cameraView === 'mezzanine' ? 'bg-orange-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Mezzanine
+            </button>
+            <button
+              onClick={() => setCameraView('bar')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-black transition-colors ${
+                cameraView === 'bar' ? 'bg-orange-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Bar Lounge
+            </button>
+            <button
+              onClick={() => setCameraView('vip')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-black transition-colors ${
+                cameraView === 'vip' ? 'bg-orange-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              VIP Table
             </button>
             <button
               onClick={() => setCameraView('top')}
@@ -644,14 +678,14 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
                 cameraView === 'walk' ? 'bg-orange-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
               }`}
             >
-              Eye-Level
+              Entrance
             </button>
           </div>
         </div>
       </div>
 
-      {/* 3D WebGL Canvas Container */}
-      <div ref={mountRef} className="w-full h-[480px] cursor-grab active:cursor-grabbing" />
+      {/* 3D WebGL Canvas Container - Expanded Breadth & Realistic Proportions */}
+      <div ref={mountRef} className="w-full h-[560px] sm:h-[620px] cursor-grab active:cursor-grabbing" />
 
       {/* Hovered or Selected Table Info Tooltip */}
       {hoveredTable && (

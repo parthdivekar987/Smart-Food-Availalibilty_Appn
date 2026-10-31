@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axiosClient from '../../api/axiosClient';
 import { waiterApi } from '../../api/waiterApi';
+import { orderApi } from '../../api/orderApi';
 import { useSocketStore } from '../../store/useSocketStore';
 import { toast } from 'react-hot-toast';
 import BillModal from '../../components/waiter/BillModal';
@@ -169,6 +170,16 @@ export default function WaiterPage() {
     }
   };
 
+  const handleAdjustEstimate = async (orderId: string, minutes: number) => {
+    try {
+      await orderApi.updateEstimate(orderId, minutes);
+      toast.success(`Updated prep time to ${minutes} mins!`, { icon: '⏱️' });
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, estimatedPrepMinutes: minutes } : o));
+    } catch (err) {
+      toast.error('Failed to update prep time');
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
 
@@ -191,6 +202,13 @@ export default function WaiterPage() {
         }
       });
 
+      // Realtime estimate updated notification
+      socket.on('order_estimate_updated', (data: any) => {
+        if (data?.orderId && data?.estimatedPrepMinutes !== undefined) {
+          setOrders(prev => prev.map(o => o.id === data.orderId ? { ...o, estimatedPrepMinutes: data.estimatedPrepMinutes } : o));
+        }
+      });
+
       // Bill requested notification - real-time update
       socket.on('bill_requested', (updatedOrder: Order) => {
         toast.success(`${updatedOrder.tableSession?.table?.name || 'A table'} requested the bill!`, { icon: '💵', duration: 5000 });
@@ -209,6 +227,7 @@ export default function WaiterPage() {
       clearInterval(interval);
       socket?.off('new_order');
       socket?.off('order_status_change');
+      socket?.off('order_estimate_updated');
       socket?.off('bill_requested');
     };
   }, [activeTab, socket]);
@@ -338,6 +357,34 @@ export default function WaiterPage() {
               <div className="px-4 py-2 bg-gray-50 border-t border-dashed flex justify-between items-center">
                 <span className="font-bold text-gray-600">Total</span>
                 <span className="text-lg font-black text-gray-900">{order.totalAmount.toLocaleString('vi-VN')}đ</span>
+              </div>
+            )}
+
+            {/* Live Prep Time Adjustment for Waiter */}
+            {activeTab !== 'BILLING' && (
+              <div className="px-4 py-2.5 bg-amber-50/70 border-t border-amber-100 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1.5">
+                  ⏱️ Prep Time:
+                  <span className="font-black text-orange-600 bg-white px-2 py-0.5 rounded-full border border-orange-200">
+                    {(order as any).estimatedPrepMinutes !== undefined ? (order as any).estimatedPrepMinutes : 15}m
+                  </span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handleAdjustEstimate(order.id, Math.max(0, ((order as any).estimatedPrepMinutes || 15) - 5))}
+                    className="w-6 h-6 rounded bg-white hover:bg-amber-100 border border-amber-200 text-amber-900 font-black text-xs flex items-center justify-center transition-colors shadow-xs active:scale-95"
+                    title="Subtract 5 mins"
+                  >
+                    -
+                  </button>
+                  <button
+                    onClick={() => handleAdjustEstimate(order.id, ((order as any).estimatedPrepMinutes || 15) + 5)}
+                    className="w-6 h-6 rounded bg-white hover:bg-amber-100 border border-amber-200 text-amber-900 font-black text-xs flex items-center justify-center transition-colors shadow-xs active:scale-95"
+                    title="Add 5 mins"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             )}
 

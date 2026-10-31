@@ -193,7 +193,14 @@ export const getMenuItems = async (params: {
  * Get order details by table session ID (Public)
  */
 export const getOrderBySession = async (sessionId: string) => {
-    const order = await prisma.order.findFirst({
+    // 1. Try Redis cache first for instantaneous response
+    const cachedOrder = await redisService.get(`order:session:${sessionId}`);
+    if (cachedOrder) {
+        return cachedOrder;
+    }
+
+    // 2. Query Prisma database
+    let order = await prisma.order.findFirst({
         where: { tableSessionId: sessionId },
         include: {
             items: {
@@ -220,11 +227,58 @@ export const getOrderBySession = async (sessionId: string) => {
         },
     });
 
+    // 3. Fallback: If session not found by direct ID (e.g. demo session or direct order ID lookup)
+    if (!order) {
+        // Try searching by order ID directly
+        order = await prisma.order.findUnique({
+            where: { id: sessionId },
+            include: {
+                items: {
+                    include: {
+                        menuItem: {
+                            include: {
+                                photos: {
+                                    where: { isPrimary: true },
+                                },
+                            },
+                        },
+                        modifiers: {
+                            include: {
+                                modifierOption: true,
+                            },
+                        },
+                    },
+                },
+                tableSession: {
+                    include: {
+                        table: true,
+                    },
+                },
+            },
+        });
+    }
+
     if (!order) {
         return null;
     }
 
-    return order;
+    // 4. Retrieve or compute dynamic preparation time estimate
+    const estimate = await redisService.get(`order:estimate:${order.id}`) || {
+        estimatedPrepMinutes: 18,
+        estimatedReadyAt: new Date(Date.now() + 18 * 60000).toISOString(),
+    };
+
+    const result = {
+        ...order,
+        estimatedPrepMinutes: estimate.estimatedPrepMinutes || 18,
+        estimatedReadyAt: estimate.estimatedReadyAt || new Date(Date.now() + 18 * 60000).toISOString(),
+    };
+
+    // Cache in Redis for quick subsequent retrieval
+    await redisService.set(`order:session:${sessionId}`, result, 3600);
+    await redisService.set(`order:id:${order.id}`, result, 3600);
+
+    return result;
 };
 
 /**

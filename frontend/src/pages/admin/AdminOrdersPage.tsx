@@ -41,12 +41,14 @@ const AdminOrdersPage = () => {
         socket.on('order_status_change', handleRealtimeOrder);
         socket.on('order_ready', handleRealtimeOrder);
         socket.on('order_accepted', handleRealtimeOrder);
+        socket.on('order_estimate_updated', handleRealtimeOrder);
 
         return () => {
             socket.off('new_order', handleRealtimeOrder);
             socket.off('order_status_change', handleRealtimeOrder);
             socket.off('order_ready', handleRealtimeOrder);
             socket.off('order_accepted', handleRealtimeOrder);
+            socket.off('order_estimate_updated', handleRealtimeOrder);
         };
     }, [socket]);
 
@@ -88,6 +90,16 @@ const AdminOrdersPage = () => {
             fetchOrders();
         } catch (error) {
             ui.alertError("Failed to update status");
+        }
+    };
+
+    const handleAdjustEstimate = async (orderId: string, minutes: number) => {
+        try {
+            await orderApi.updateEstimate(orderId, minutes);
+            ui.alertSuccess(`Prep time set to ${minutes} mins`);
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, estimatedPrepMinutes: minutes } : o));
+        } catch (error) {
+            ui.alertError("Failed to update prep time estimate");
         }
     };
 
@@ -155,6 +167,7 @@ const AdminOrdersPage = () => {
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Items</th>
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Total</th>
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Est. Prep Time</th>
                                     <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -185,6 +198,27 @@ const AdminOrdersPage = () => {
                                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${getStatusColor(order.status)}`}>
                                                 {getStatusLabel(order.status)}
                                             </span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    onClick={() => handleAdjustEstimate(order.id, Math.max(0, ((order as any).estimatedPrepMinutes || 15) - 5))}
+                                                    className="w-6 h-6 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-black text-xs flex items-center justify-center transition-colors"
+                                                    title="Reduce estimate 5 mins"
+                                                >
+                                                    -
+                                                </button>
+                                                <span className="text-xs font-black px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                                                    {(order as any).estimatedPrepMinutes !== undefined ? (order as any).estimatedPrepMinutes : 15}m
+                                                </span>
+                                                <button
+                                                    onClick={() => handleAdjustEstimate(order.id, ((order as any).estimatedPrepMinutes || 15) + 5)}
+                                                    className="w-6 h-6 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-black text-xs flex items-center justify-center transition-colors"
+                                                    title="Add 5 mins estimate"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <select

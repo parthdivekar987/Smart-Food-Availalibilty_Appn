@@ -11,6 +11,7 @@ import { getPhotoUrl } from '../utils/photoUrl';
 export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { items, totalAmount, clearCart, updateQuantity, removeFromCart } = useCartStore();
   const sessionId = useSessionStore(state => state.sessionId);
+  const setActiveOrder = useSessionStore(state => state.setActiveOrder);
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderNotes, setOrderNotes] = useState('');
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -27,13 +28,43 @@ export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClos
     }
     try {
       setIsOrdering(true);
-      await guestApi.placeOrder({
+      const res: any = await guestApi.placeOrder({
         tableSessionId: sessionId,
         items: items.map(item => ({
           ...item,
           note: orderNotes || undefined
         }))
       });
+
+      const placedOrder = res?.order || res;
+      if (placedOrder) {
+        // Enforce active order structure with items and dynamic estimated prep time
+        setActiveOrder({
+          id: placedOrder.id || 'order-' + Date.now(),
+          status: placedOrder.status || 'RECEIVED',
+          totalAmount: placedOrder.totalAmount || totalAmount,
+          createdAt: placedOrder.createdAt || new Date().toISOString(),
+          estimatedPrepMinutes: placedOrder.estimatedPrepMinutes || 18,
+          estimatedReadyAt: placedOrder.estimatedReadyAt || new Date(Date.now() + 18 * 60000).toISOString(),
+          tableSession: placedOrder.tableSession || { table: { name: 'Your Table' } },
+          items: placedOrder.items && placedOrder.items.length > 0 ? placedOrder.items.map((it: any) => ({
+            id: it.id || 'it-' + Math.random(),
+            quantity: it.quantity,
+            price: it.price,
+            status: it.status || 'RECEIVED',
+            menuItem: it.menuItem || { name: it.name || 'Gourmet Dish', price: it.price, photos: it.image ? [{ url: it.image }] : [] },
+            modifiers: it.modifiers || [],
+          })) : items.map((it: any) => ({
+            id: it.id,
+            quantity: it.quantity,
+            price: it.price,
+            status: 'RECEIVED',
+            menuItem: { name: it.name, price: it.price, photos: it.image ? [{ url: it.image }] : [] },
+            modifiers: [],
+          }))
+        });
+      }
+
       setOrderSuccess(true);
       setTimeout(() => {
         clearCart();

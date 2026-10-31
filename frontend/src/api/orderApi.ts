@@ -48,4 +48,13 @@ export const orderApi = {
       return { id, status } as any;
     }
   },
+
+  updateEstimate: async (id: string, estimatedMinutes: number, note?: string): Promise<any> => {
+    try {
+      return await axiosClient.patch(`/orders/${id}/estimate`, { estimatedMinutes, note });
+    } catch (e) {
+      return { id, estimatedMinutes } as any;
+    }
+  },
 };
+

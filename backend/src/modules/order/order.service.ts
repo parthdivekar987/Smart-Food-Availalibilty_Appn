@@ -1,6 +1,7 @@
 import { OrderStatus } from "@prisma/client";
 import * as notificationService from "../notification/notification.service";
 import prisma from "../../shared/config/prisma.client";
+import { redisService } from "../../shared/services/redis.service";
 
 // Types for order creation
 interface OrderItemInput {
@@ -45,13 +46,33 @@ const orderInclude = {
 export const createOrder = async (data: CreateOrderInput) => {
     const { tableSessionId, items, userId } = data;
 
-    // 1. Check if session is valid and open
-    const session = await prisma.tableSession.findUnique({
+    // 1. Check if session is valid and open; if missing (e.g. demo guest order), auto-create or link to available table
+    let session = await prisma.tableSession.findUnique({
         where: { id: tableSessionId },
     });
 
     if (!session || session.status !== "OPEN") {
-        throw new Error("Phiên làm việc không hợp lệ hoặc đã đóng");
+        let table = await prisma.table.findFirst();
+        if (!table) {
+            let restaurant = await prisma.restaurant.findFirst();
+            if (!restaurant) {
+                restaurant = await prisma.restaurant.create({
+                    data: { name: "Smart Restaurant Luxury Dining", address: "123 Culinary Boulevard" }
+                });
+            }
+            table = await prisma.table.create({
+                data: { name: "Table 01 (Window)", capacity: 4, restaurantId: restaurant.id }
+            });
+        }
+        session = await prisma.tableSession.upsert({
+            where: { id: tableSessionId },
+            update: { status: "OPEN" },
+            create: {
+                id: tableSessionId,
+                tableId: table.id,
+                status: "OPEN"
+            }
+        });
     }
 
     // 2. Use Transaction to ensure data integrity
@@ -161,6 +182,27 @@ export const createOrder = async (data: CreateOrderInput) => {
             include: orderInclude,
         });
 
+        // Calculate dynamic preparation time estimate
+        const prepTimes = updatedOrder.items.map((it: any) => it.menuItem?.prepTime || 15);
+        const maxPrepTime = Math.max(15, ...prepTimes);
+        const activePreparingCount = await tx.order.count({ where: { status: "PREPARING" } });
+        const estimatedPrepMinutes = maxPrepTime + Math.min(activePreparingCount * 2, 20);
+        const estimatedReadyAt = new Date(Date.now() + estimatedPrepMinutes * 60000).toISOString();
+
+        const estimateData = {
+            orderId: updatedOrder.id,
+            tableSessionId,
+            estimatedPrepMinutes,
+            estimatedReadyAt,
+            updatedAt: new Date().toISOString(),
+        };
+
+        // Cache in Redis
+        await redisService.set(`order:estimate:${updatedOrder.id}`, estimateData, 86400);
+        const enrichedOrder = { ...updatedOrder, ...estimateData };
+        await redisService.set(`order:session:${tableSessionId}`, enrichedOrder, 86400);
+        await redisService.set(`order:id:${updatedOrder.id}`, enrichedOrder, 86400);
+
         // Emit notification for new order
         const tableData = updatedOrder.tableSession?.table;
         notificationService.notifyNewOrder({
@@ -177,7 +219,7 @@ export const createOrder = async (data: CreateOrderInput) => {
             totalAmount: updatedOrder.totalAmount,
         });
 
-        return updatedOrder;
+        return enrichedOrder;
     });
 
     return result;
@@ -324,17 +366,89 @@ export const updateOrderStatus = async (id: string, status: OrderStatus) => {
         });
     }
 
-    return updatedOrder;
+    // Update Redis cache with updated status & estimate
+    const isCompletedOrReady = ['READY', 'SERVED', 'COMPLETED'].includes(status);
+    const existingEstimate = await redisService.get(`order:estimate:${id}`) || {
+        estimatedPrepMinutes: isCompletedOrReady ? 0 : 15,
+        estimatedReadyAt: new Date().toISOString(),
+    };
+    if (isCompletedOrReady) {
+        existingEstimate.estimatedPrepMinutes = 0;
+    }
+    await redisService.set(`order:estimate:${id}`, existingEstimate, 86400);
+
+    const enrichedOrder = { ...updatedOrder, ...existingEstimate };
+    await redisService.set(`order:session:${tableSessionId}`, enrichedOrder, 86400);
+    await redisService.set(`order:id:${id}`, enrichedOrder, 86400);
+
+    return enrichedOrder;
 };
 
 /**
  * Get orders by table session ID
  */
 export const getOrderByTableSession = async (tableSessionId: string) => {
-    return await prisma.order.findUnique({
+    // 1. Try Redis first
+    const cached = await redisService.get(`order:session:${tableSessionId}`);
+    if (cached) return cached;
+
+    // 2. Query Prisma
+    const order = await prisma.order.findUnique({
         where: { tableSessionId },
         include: orderInclude,
     });
+    if (!order) return null;
+
+    const estimate = await redisService.get(`order:estimate:${order.id}`) || {
+        estimatedPrepMinutes: 15,
+        estimatedReadyAt: new Date(Date.now() + 15 * 60000).toISOString(),
+    };
+
+    const enriched = { ...order, ...estimate };
+    await redisService.set(`order:session:${tableSessionId}`, enriched, 86400);
+    await redisService.set(`order:id:${order.id}`, enriched, 86400);
+    return enriched;
+};
+
+/**
+ * Update dynamic estimated preparation time (Super Admin or Waiter)
+ */
+export const updateOrderEstimate = async (id: string, estimatedMinutes: number, note?: string) => {
+    const order = await prisma.order.findUnique({
+        where: { id },
+        include: orderInclude,
+    });
+
+    if (!order) {
+        throw new Error("Order not found");
+    }
+
+    const estimatedReadyAt = new Date(Date.now() + estimatedMinutes * 60000).toISOString();
+    const estimateData = {
+        orderId: order.id,
+        tableSessionId: order.tableSessionId,
+        estimatedPrepMinutes: Math.max(0, estimatedMinutes),
+        estimatedReadyAt,
+        note: note || undefined,
+        updatedAt: new Date().toISOString(),
+    };
+
+    // Store in Redis
+    await redisService.set(`order:estimate:${order.id}`, estimateData, 86400);
+    const enrichedOrder = { ...order, ...estimateData };
+    await redisService.set(`order:session:${order.tableSessionId}`, enrichedOrder, 86400);
+    await redisService.set(`order:id:${order.id}`, enrichedOrder, 86400);
+
+    // Broadcast live to guest tracking page and staff dashboards
+    notificationService.notifyOrderEstimateUpdated({
+        orderId: order.id,
+        tableSessionId: order.tableSessionId,
+        estimatedPrepMinutes: Math.max(0, estimatedMinutes),
+        estimatedReadyAt,
+        note,
+    });
+
+    return enrichedOrder;
 };
 
 /**

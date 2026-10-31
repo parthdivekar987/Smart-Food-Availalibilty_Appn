@@ -121,8 +121,8 @@ const EntryPoint = () => {
       <div className="min-h-screen bg-gradient-to-br from-orange-50/50 via-white to-orange-50/40 flex flex-col pb-24">
         {/* 3D FLOOR PLAN MODAL */}
         {showFloorModal && (
-          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6">
-            <div className="w-full max-w-3xl bg-[#0f1117] rounded-3xl overflow-hidden shadow-2xl border border-gray-800 relative flex flex-col max-h-[90vh]">
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6">
+            <div className="w-full max-w-6xl w-[95vw] bg-[#0f1117] rounded-3xl overflow-hidden shadow-2xl border border-gray-800 relative flex flex-col max-h-[92vh]">
               <div className="p-4 bg-gray-900/80 border-b border-gray-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Compass className="text-orange-500" size={20} />

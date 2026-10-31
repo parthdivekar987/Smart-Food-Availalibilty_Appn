@@ -565,12 +565,12 @@ export default function MenuPage() {
       {/* 3D Floor Plan Modal */}
       <AnimatePresence>
         {showFloorPlan && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6">
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-3xl bg-[#0f1117] rounded-3xl overflow-hidden shadow-2xl border border-gray-800 relative flex flex-col max-h-[90vh]"
+              className="w-full max-w-6xl w-[95vw] bg-[#0f1117] rounded-3xl overflow-hidden shadow-2xl border border-gray-800 relative flex flex-col max-h-[92vh]"
             >
               <div className="p-4 bg-gray-900/80 border-b border-gray-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">

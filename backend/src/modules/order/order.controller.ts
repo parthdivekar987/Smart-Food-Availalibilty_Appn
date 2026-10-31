@@ -58,6 +58,26 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     }
 };
 
+/**
+ * Update dynamic estimated preparation time (Super Admin or Waiter)
+ */
+export const updateOrderEstimate = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { estimatedMinutes, note } = req.body;
+
+        if (estimatedMinutes === undefined || isNaN(Number(estimatedMinutes))) {
+            return res.status(400).json({ error: "estimatedMinutes is required and must be a number" });
+        }
+
+        const updatedOrder = await orderService.updateOrderEstimate(id, Number(estimatedMinutes), note);
+        res.json(updatedOrder);
+    } catch (error: any) {
+        console.error("Error updating order estimate:", error);
+        res.status(500).json({ error: error.message || "Failed to update order estimate" });
+    }
+};
+
 
 /**
  * Create a new order (Guest creates from cart)
