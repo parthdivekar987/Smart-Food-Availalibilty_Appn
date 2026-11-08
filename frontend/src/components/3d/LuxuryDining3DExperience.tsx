@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Move3d, Flame, Eye, RefreshCw, Award, Compass, ShieldCheck } from 'lucide-react';
+import { Sparkles, Move3d, Flame, Eye, RefreshCw, Award, Compass } from 'lucide-react';
 
 interface LuxuryDining3DProps {
   onExploreHall?: () => void;
@@ -13,26 +13,30 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
   onInstantDemo,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
-  const [isClocheOpen, setIsClocheOpen] = useState(false);
+  const [isClocheOpen, setIsClocheOpen] = useState(true); // Open by default to showcase the steaming burger & waiter hand
   const [viewMode, setViewMode] = useState<'cloche' | 'spaceFeast'>('cloche');
   const [isInteracting, setIsInteracting] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
 
   // References to communicate with Three.js animation loop
   const stateRef = useRef({
-    isClocheOpen: false,
+    isClocheOpen: true,
     viewMode: 'cloche' as 'cloche' | 'spaceFeast',
     autoRotate: true,
-    targetClocheY: 0,
-    currentClocheY: 0,
-    targetClocheRotX: 0,
-    currentClocheRotX: 0,
+    targetClocheY: 2.35,
+    currentClocheY: 2.35,
+    targetClocheRotX: -0.28,
+    currentClocheRotX: -0.28,
+    aromaBurst: 1.0,
   });
 
   useEffect(() => {
     stateRef.current.isClocheOpen = isClocheOpen;
-    stateRef.current.targetClocheY = isClocheOpen ? 2.4 : 0;
-    stateRef.current.targetClocheRotX = isClocheOpen ? -0.32 : 0;
+    stateRef.current.targetClocheY = isClocheOpen ? 2.35 : 0;
+    stateRef.current.targetClocheRotX = isClocheOpen ? -0.28 : 0;
+    if (isClocheOpen) {
+      stateRef.current.aromaBurst = 1.0;
+    }
   }, [isClocheOpen]);
 
   useEffect(() => {
@@ -71,18 +75,18 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
     let width = container.clientWidth || 360;
     let height = container.clientHeight || 300;
 
-    // 1. SCENE & CAMERA (Optimized for both Mobile Android & Desktop)
+    // 1. SCENE & CAMERA
     const scene = new THREE.Scene();
 
     const isMobile = width < 540;
-    const initialCamZ = isMobile ? 6.1 : 5.4;
-    const initialCamY = isMobile ? 2.0 : 1.8;
+    const initialCamZ = isMobile ? 6.2 : 5.4;
+    const initialCamY = isMobile ? 2.1 : 1.85;
 
     const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
     camera.position.set(0, initialCamY, initialCamZ);
-    camera.lookAt(0, 0.2, 0);
+    camera.lookAt(0, 0.25, 0);
 
-    // 2. RENDERER (Capped pixel ratio for silky 60fps on Android Adreno & Mali GPUs)
+    // 2. RENDERER
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
@@ -91,32 +95,32 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.38;
+    renderer.toneMappingExposure = 1.4;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.replaceChildren(renderer.domElement);
 
-    // 3. CINEMATIC LUXURY LIGHTING
-    const ambientLight = new THREE.AmbientLight(0xfff1e0, 1.25);
+    // 3. CINEMATIC LUXURY DINING LIGHTING
+    const ambientLight = new THREE.AmbientLight(0xfff4e6, 1.3);
     scene.add(ambientLight);
 
-    // Warm Key Light (Golden Gastronomy Spotlight)
-    const keyLight = new THREE.DirectionalLight(0xffd599, 3.4);
-    keyLight.position.set(4, 7, 5);
+    // Key Gourmet Spotlight
+    const keyLight = new THREE.DirectionalLight(0xffeedd, 3.6);
+    keyLight.position.set(3.5, 7.5, 4.5);
     keyLight.castShadow = true;
     scene.add(keyLight);
 
-    // Ruby & Amber Rim Light
-    const rimLight = new THREE.DirectionalLight(0xf97316, 3.0);
-    rimLight.position.set(-5, 3, -3);
+    // Warm Amber Rim Light
+    const rimLight = new THREE.DirectionalLight(0xf97316, 2.8);
+    rimLight.position.set(-4.5, 3, -2.5);
     scene.add(rimLight);
 
-    // Cyan Fill for Specular Contrast
-    const fillLight = new THREE.PointLight(0x38bdf8, 1.6, 14);
-    fillLight.position.set(4, -2, 3);
+    // Subtle Cyan Fill
+    const fillLight = new THREE.PointLight(0x38bdf8, 1.4, 12);
+    fillLight.position.set(3.5, -2, 2.5);
     scene.add(fillLight);
 
-    // Internal Cloche Hearth Fire / Glow
+    // Hearth Flame Glow inside the Cloche/Platter
     const innerDishGlow = new THREE.PointLight(0xff7700, 3.8, 5);
     innerDishGlow.position.set(0, 0.8, 0);
     scene.add(innerDishGlow);
@@ -131,7 +135,7 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
     const clocheSceneGroup = new THREE.Group();
     universeGroup.add(clocheSceneGroup);
 
-    // Base Pedestal: Nero Marquina Dark Polished Platter
+    // Platter: Dark Nero Marquina Polished Serving Plate
     const platterBaseMat = new THREE.MeshPhysicalMaterial({
       color: 0x12141a,
       roughness: 0.15,
@@ -144,7 +148,7 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
     platter.receiveShadow = true;
     clocheSceneGroup.add(platter);
 
-    // Platter Gold Outer Ring
+    // Platter Gold Rim Inset
     const goldMat = new THREE.MeshPhysicalMaterial({
       color: 0xf59e0b,
       metalness: 0.95,
@@ -156,38 +160,31 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
     outerGoldRing.position.y = -0.5;
     clocheSceneGroup.add(outerGoldRing);
 
-    // Concentric Inner Gold Trim
-    const innerGoldRing = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.035, 16, 56), goldMat);
-    innerGoldRing.rotation.x = Math.PI / 2;
-    innerGoldRing.position.y = -0.45;
-    clocheSceneGroup.add(innerGoldRing);
-
-    // Platter Inner Ceramic Inset
-    const ceramicMat = new THREE.MeshStandardMaterial({ color: 0x1e212b, roughness: 0.25 });
-    const ceramicDisk = new THREE.Mesh(new THREE.CylinderGeometry(1.68, 1.68, 0.02, 40), ceramicMat);
+    // Platter Ceramic Inlay
+    const ceramicMat = new THREE.MeshStandardMaterial({ color: 0x1a1d26, roughness: 0.3 });
+    const ceramicDisk = new THREE.Mesh(new THREE.CylinderGeometry(1.72, 1.72, 0.02, 44), ceramicMat);
     ceramicDisk.position.y = -0.45;
     clocheSceneGroup.add(ceramicDisk);
 
-    // ─── GOURMET DISH (Under Cloche) ───
+    // ─── GOURMET BURGER DISH (Centerpiece) ───
     const dishGroup = new THREE.Group();
     dishGroup.position.y = -0.42;
     clocheSceneGroup.add(dishGroup);
 
-    // Materials for the Gourmet Dish
     const bunMat = new THREE.MeshPhysicalMaterial({
       color: 0xd97706,
       roughness: 0.35,
       metalness: 0.05,
-      clearcoat: 0.4,
+      clearcoat: 0.45,
     });
     const pattyMat = new THREE.MeshStandardMaterial({ color: 0x3d1c10, roughness: 0.88 });
     const cheeseMat = new THREE.MeshPhysicalMaterial({
       color: 0xf59e0b,
       roughness: 0.25,
-      clearcoat: 0.6,
+      clearcoat: 0.65,
     });
     const lettuceMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.7 });
-    const tomatoMat = new THREE.MeshPhysicalMaterial({ color: 0xdc2626, roughness: 0.15, clearcoat: 0.8 });
+    const tomatoMat = new THREE.MeshPhysicalMaterial({ color: 0xdc2626, roughness: 0.15, clearcoat: 0.85 });
     const sesameMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.5 });
 
     // Bottom Toasted Brioche Bun
@@ -220,7 +217,7 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
     tomato2.position.set(0.25, 0.58, -0.08);
     dishGroup.add(tomato2);
 
-    // Glazed Brioche Top Crown
+    // Glazed Brioche Crown
     const topBun = new THREE.Mesh(
       new THREE.SphereGeometry(0.92, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2),
       bunMat
@@ -229,7 +226,7 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
     topBun.position.y = 0.65;
     dishGroup.add(topBun);
 
-    // Sesame Seeds scattered on Crown
+    // Sesame Seeds on Crown
     for (let i = 0; i < 28; i++) {
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.random() * 0.75 + 0.1;
@@ -244,34 +241,75 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
       dishGroup.add(seed);
     }
 
-    // ─── STEAM & AROMA PARTICLES ───
-    const steamCount = 22;
-    const steamGeo = new THREE.SphereGeometry(0.045, 5, 5);
-    const steamMat = new THREE.MeshBasicMaterial({
-      color: 0xffedd5,
+    // ─── AUTHENTIC CULINARY AROMA & STEAM WISPS (NO SCI-FI RINGS) ───
+    const aromaCount = 42;
+    const aromaGeo = new THREE.SphereGeometry(0.1, 8, 8);
+    const aromaMat = new THREE.MeshBasicMaterial({
+      color: 0xfff6ea,
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.28,
     });
-    const steamParticles: { mesh: THREE.Mesh; seedX: number; speed: number; phase: number }[] = [];
+    
+    interface AromaParticle {
+      mesh: THREE.Mesh;
+      baseX: number;
+      baseZ: number;
+      speedY: number;
+      phase: number;
+      curlRadius: number;
+      baseScale: number;
+    }
+    const aromaParticles: AromaParticle[] = [];
 
-    for (let i = 0; i < steamCount; i++) {
-      const p = new THREE.Mesh(steamGeo, steamMat);
-      p.position.set((Math.random() - 0.5) * 0.8, 0.8 + Math.random() * 1.2, (Math.random() - 0.5) * 0.8);
+    for (let i = 0; i < aromaCount; i++) {
+      const p = new THREE.Mesh(aromaGeo, aromaMat.clone());
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * 0.55;
+      const baseX = Math.cos(angle) * dist;
+      const baseZ = Math.sin(angle) * dist;
+      const startY = 0.2 + Math.random() * 2.2;
+
+      p.position.set(baseX, startY, baseZ);
       clocheSceneGroup.add(p);
-      steamParticles.push({
+
+      aromaParticles.push({
         mesh: p,
-        seedX: Math.random() * 4,
-        speed: 0.6 + Math.random() * 0.7,
+        baseX,
+        baseZ,
+        speedY: 0.8 + Math.random() * 0.9,
+        phase: Math.random() * Math.PI * 2,
+        curlRadius: 0.12 + Math.random() * 0.2,
+        baseScale: 0.7 + Math.random() * 0.8,
+      });
+    }
+
+    // Appetizing warm culinary vapor motes (micro-glowing aroma flecks)
+    const vaporCount = 30;
+    const vaporGeo = new THREE.SphereGeometry(0.016, 5, 5);
+    const vaporMat = new THREE.MeshBasicMaterial({ color: 0xffedd5, transparent: true, opacity: 0.75 });
+    const vaporMotes: { mesh: THREE.Mesh; speed: number; angle: number; r: number; phase: number }[] = [];
+
+    for (let i = 0; i < vaporCount; i++) {
+      const v = new THREE.Mesh(vaporGeo, vaporMat);
+      const r = 0.3 + Math.random() * 0.8;
+      const angle = Math.random() * Math.PI * 2;
+      v.position.set(Math.cos(angle) * r, 0.4 + Math.random() * 1.8, Math.sin(angle) * r);
+      clocheSceneGroup.add(v);
+      vaporMotes.push({
+        mesh: v,
+        speed: 0.4 + Math.random() * 0.6,
+        angle,
+        r,
         phase: Math.random() * Math.PI * 2,
       });
     }
 
-    // ─── THE ROYAL CLOCHE DOME (Animated Lift) ───
+    // ─── THE ROYAL CLOCHE DOME (Serving Cover) ───
     const clocheGroup = new THREE.Group();
     clocheGroup.position.y = -0.42;
     clocheSceneGroup.add(clocheGroup);
 
-    // The Mirror-Polished Gold Dome
+    // The Mirror-Polished 24K Gold Dome
     const domeMat = new THREE.MeshPhysicalMaterial({
       color: 0xf59e0b,
       metalness: 0.96,
@@ -291,7 +329,7 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
     clocheLip.rotation.x = Math.PI / 2;
     clocheGroup.add(clocheLip);
 
-    // Cloche Ornamental Handle
+    // Cloche Ornamental Handle / Ring
     const handleStem = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.3, 14), goldMat);
     handleStem.position.y = 1.68;
     clocheGroup.add(handleStem);
@@ -301,45 +339,109 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
     handleRing.position.y = 1.95;
     clocheGroup.add(handleRing);
 
-    // ─── AMBIENT ORBITAL RINGS & STARDUST ───
-    const orbitRing1 = new THREE.Mesh(
-      new THREE.TorusGeometry(2.7, 0.015, 14, 64),
-      new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.3 })
-    );
-    orbitRing1.rotation.x = Math.PI / 3;
-    clocheSceneGroup.add(orbitRing1);
+    // ─── WAITER'S HAND & SUITED ARM (Opening Cloche Cover for You) ───
+    const waiterArmGroup = new THREE.Group();
+    clocheGroup.add(waiterArmGroup);
 
-    const orbitRing2 = new THREE.Mesh(
-      new THREE.TorusGeometry(2.4, 0.015, 14, 64),
-      new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.25 })
-    );
-    orbitRing2.rotation.y = Math.PI / 4;
-    clocheSceneGroup.add(orbitRing2);
+    // Fine-Dining Server Suit Material
+    const suitMat = new THREE.MeshStandardMaterial({
+      color: 0x111319, // Crisp black tuxedo fabric
+      roughness: 0.85,
+      metalness: 0.1,
+    });
 
-    // ─── FLOATING GLOWING EMBERS ───
-    const emberCount = 35;
-    const emberGeo = new THREE.SphereGeometry(0.02, 5, 5);
-    const emberMat = new THREE.MeshBasicMaterial({ color: 0xffa500, transparent: true, opacity: 0.8 });
-    const embers: { mesh: THREE.Mesh; orbitR: number; speed: number; angle: number; yBase: number }[] = [];
+    const cuffMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, // Pristine white French dress shirt cuff
+      roughness: 0.4,
+    });
 
-    for (let i = 0; i < emberCount; i++) {
-      const ember = new THREE.Mesh(emberGeo, emberMat);
-      const orbitR = 1.8 + Math.random() * 1.8;
-      const angle = Math.random() * Math.PI * 2;
-      const yBase = (Math.random() - 0.5) * 2.5;
-      ember.position.set(Math.cos(angle) * orbitR, yBase, Math.sin(angle) * orbitR);
-      clocheSceneGroup.add(ember);
-      embers.push({ mesh: ember, orbitR, speed: 0.2 + Math.random() * 0.4, angle, yBase });
-    }
+    const cufflinkMat = new THREE.MeshPhysicalMaterial({
+      color: 0xf59e0b, // Golden cufflink
+      metalness: 0.95,
+      roughness: 0.15,
+      clearcoat: 0.8,
+    });
+
+    const gloveMat = new THREE.MeshPhysicalMaterial({
+      color: 0xf8fafc, // Pure white fine-dining waiter glove
+      roughness: 0.55,
+      clearcoat: 0.25,
+    });
+
+    // Forearm: Slanted down from upper-right toward the handle
+    const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 2.2, 18), suitMat);
+    forearm.position.set(0.85, 2.95, 0.35);
+    forearm.rotation.set(-0.25, 0.2, -0.68);
+    waiterArmGroup.add(forearm);
+
+    // White Shirt Cuff at wrist
+    const shirtCuff = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.28, 0.2, 18), cuffMat);
+    shirtCuff.position.set(0.35, 2.25, 0.18);
+    shirtCuff.rotation.set(-0.25, 0.2, -0.68);
+    waiterArmGroup.add(shirtCuff);
+
+    // Golden Cufflink Button
+    const cufflink = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.07, 12), cufflinkMat);
+    cufflink.position.set(0.44, 2.3, 0.32);
+    cufflink.rotation.z = Math.PI / 2;
+    waiterArmGroup.add(cufflink);
+
+    // Gloved Wrist
+    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.24, 0.3, 16), gloveMat);
+    wrist.position.set(0.22, 2.12, 0.12);
+    wrist.rotation.set(-0.2, 0.15, -0.58);
+    waiterArmGroup.add(wrist);
+
+    // Gloved Palm
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.42, 0.24), gloveMat);
+    palm.position.set(0.1, 1.98, 0.07);
+    palm.rotation.set(0.1, -0.2, -0.32);
+    waiterArmGroup.add(palm);
+
+    // Thumb gripping the handle ring
+    const thumb = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.28, 10), gloveMat);
+    thumb.position.set(0.14, 1.88, -0.08);
+    thumb.rotation.set(-0.6, 0.3, 0.35);
+    waiterArmGroup.add(thumb);
+
+    const thumbTip = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), gloveMat);
+    thumbTip.position.set(0.08, 1.82, -0.16);
+    waiterArmGroup.add(thumbTip);
+
+    // Index Finger curved over the ring
+    const indexFinger = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.28, 10), gloveMat);
+    indexFinger.position.set(-0.02, 1.94, 0.12);
+    indexFinger.rotation.set(0.5, -0.2, -0.4);
+    waiterArmGroup.add(indexFinger);
+
+    const indexTip = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), gloveMat);
+    indexTip.position.set(-0.07, 1.85, 0.16);
+    waiterArmGroup.add(indexTip);
+
+    // Middle Finger looped through handle
+    const middleFinger = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.3, 10), gloveMat);
+    middleFinger.position.set(0.03, 1.9, 0.17);
+    middleFinger.rotation.set(0.4, 0, -0.3);
+    waiterArmGroup.add(middleFinger);
+
+    // Ring & Pinky Fingers curled gracefully
+    const ringFinger = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.25, 10), gloveMat);
+    ringFinger.position.set(0.1, 1.88, 0.18);
+    ringFinger.rotation.set(0.3, 0.2, -0.2);
+    waiterArmGroup.add(ringFinger);
+
+    const pinkyFinger = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.22, 10), gloveMat);
+    pinkyFinger.position.set(0.17, 1.87, 0.16);
+    pinkyFinger.rotation.set(0.2, 0.3, -0.1);
+    waiterArmGroup.add(pinkyFinger);
 
     // ==========================================
-    // SCENE B: ZERO-G COSMIC FEAST
+    // SCENE B: ZERO-G COSMIC FEAST (Optional Mode)
     // ==========================================
     const spaceSceneGroup = new THREE.Group();
     universeGroup.add(spaceSceneGroup);
     spaceSceneGroup.visible = false;
 
-    // Center Burger for Space Scene
     const spaceBurger = dishGroup.clone(true);
     spaceBurger.position.set(0, 0, 0);
     spaceBurger.scale.set(1.15, 1.15, 1.15);
@@ -405,7 +507,7 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
     spaceSceneGroup.add(friesGroup);
 
     // ==========================================
-    // 4. ANDROID TOUCH & MOUSE INTERACTION
+    // 4. TOUCH & MOUSE INTERACTION
     // ==========================================
     let mouseX = 0;
     let mouseY = 0;
@@ -444,7 +546,6 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
       isHorizontalGesture = false;
     };
 
-    // Android Touch gesture handler: Smooth horizontal spin without blocking page scroll
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length > 0) {
         isMouseDown = true;
@@ -461,7 +562,6 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
         const deltaX = touch.clientX - lastX;
         const deltaY = touch.clientY - lastY;
 
-        // If swipe is primarily horizontal, rotate the 3D model
         if (!isHorizontalGesture && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 5) {
           isHorizontalGesture = true;
         }
@@ -489,15 +589,15 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
       const h = container.clientHeight || 300;
       const mob = w < 540;
       camera.aspect = w / h;
-      camera.position.z = mob ? 6.1 : 5.4;
-      camera.position.y = mob ? 2.0 : 1.8;
+      camera.position.z = mob ? 6.2 : 5.4;
+      camera.position.y = mob ? 2.1 : 1.85;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     });
     resizeObserver.observe(container);
 
     // ==========================================
-    // 5. RENDER & PHYSICS ANIMATION LOOP
+    // 5. ANIMATION & GASTRONOMY SERVING LOOP
     // ==========================================
     let clock = new THREE.Clock();
     let animId = 0;
@@ -507,56 +607,98 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
       const elapsed = clock.getElapsedTime();
       const st = stateRef.current;
 
-      // Mode visibility switch
       clocheSceneGroup.visible = st.viewMode === 'cloche';
       spaceSceneGroup.visible = st.viewMode === 'spaceFeast';
 
-      // Smooth cloche dome lift animation
-      st.currentClocheY += (st.targetClocheY - st.currentClocheY) * 0.09;
-      st.currentClocheRotX += (st.targetClocheRotX - st.currentClocheRotX) * 0.09;
-      clocheGroup.position.y = -0.42 + st.currentClocheY;
+      // ── Smooth Waiter Cloche Lift & Presentation Arc ──
+      st.currentClocheY += (st.targetClocheY - st.currentClocheY) * 0.075;
+      st.currentClocheRotX += (st.targetClocheRotX - st.currentClocheRotX) * 0.075;
+
+      // Natural Human Breathing / Holding Motion on Waiter's Hand
+      const breath = st.isClocheOpen ? Math.sin(elapsed * 1.8) * 0.04 : 0;
+      clocheGroup.position.y = -0.42 + st.currentClocheY + breath;
       clocheGroup.rotation.x = st.currentClocheRotX;
 
-      // Dynamic light reaction when cloche is open
+      // Forearm flexes slightly as it holds the cloche up
+      waiterArmGroup.rotation.z = Math.sin(elapsed * 1.5) * 0.015;
+
+      // Dynamic warm hearth lighting reaction
       innerDishGlow.intensity = THREE.MathUtils.lerp(
         innerDishGlow.intensity,
-        st.isClocheOpen ? 4.5 : 0.8,
+        st.isClocheOpen ? 4.6 : 0.6,
         0.08
       );
 
-      // Auto rotation & inertia
+      // Auto presentation rotation
       if (st.autoRotate && !isMouseDown) {
-        targetRotY += 0.0065;
+        targetRotY += 0.006;
       }
 
-      // Parallax & rotation application
-      universeGroup.rotation.y += (targetRotY + mouseX * 0.25 - universeGroup.rotation.y) * 0.06;
-      universeGroup.rotation.x += (targetRotX - mouseY * 0.18 - universeGroup.rotation.x) * 0.06;
+      // Parallax application
+      universeGroup.rotation.y += (targetRotY + mouseX * 0.22 - universeGroup.rotation.y) * 0.06;
+      universeGroup.rotation.x += (targetRotX - mouseY * 0.16 - universeGroup.rotation.x) * 0.06;
+      universeGroup.rotation.x = THREE.MathUtils.clamp(universeGroup.rotation.x, -0.4, 0.4);
 
-      // Restrict tilt so platter stays grounded
-      universeGroup.rotation.x = THREE.MathUtils.clamp(universeGroup.rotation.x, -0.42, 0.42);
+      // ── Billowing Authentic Aroma Wisps Animation ──
+      const clocheHeight = st.currentClocheY;
+      const isOpenEnough = clocheHeight > 0.4;
 
-      // Steam particles animation
-      steamParticles.forEach((sp) => {
-        const isUp = st.isClocheOpen;
-        sp.mesh.visible = isUp;
-        if (isUp) {
-          sp.mesh.position.y += sp.speed * 0.015;
-          sp.mesh.position.x += Math.sin(elapsed * 2 + sp.phase) * 0.004;
-          sp.mesh.scale.setScalar(THREE.MathUtils.lerp(0.8, 1.8, (sp.mesh.position.y - 0.4) / 1.8));
-          if (sp.mesh.position.y > 2.2) {
-            sp.mesh.position.y = 0.35 + Math.random() * 0.2;
-            sp.mesh.position.x = (Math.random() - 0.5) * 0.6;
+      aromaParticles.forEach((ap) => {
+        const mat = ap.mesh.material as THREE.MeshBasicMaterial;
+
+        if (!isOpenEnough) {
+          // Aroma is sealed under cloche
+          mat.opacity = THREE.MathUtils.lerp(mat.opacity, 0, 0.15);
+          ap.mesh.position.y = 0.25;
+        } else {
+          // Culinary steam rises with realistic convective turbulence & curling
+          ap.mesh.position.y += ap.speedY * 0.014;
+
+          // Realistic S-curve smoke swirl
+          const yProgress = (ap.mesh.position.y - 0.25) / 2.6;
+          const curlX = Math.sin(elapsed * 2.2 + ap.phase) * ap.curlRadius * (1 + yProgress * 1.4);
+          const curlZ = Math.cos(elapsed * 1.9 + ap.phase) * ap.curlRadius * (1 + yProgress * 1.4);
+          ap.mesh.position.x = ap.baseX + curlX;
+          ap.mesh.position.z = ap.baseZ + curlZ;
+
+          // Steam expands as it rises
+          const scale = ap.baseScale * (0.6 + yProgress * 2.2);
+          ap.mesh.scale.set(scale, scale * 1.3, scale);
+
+          // Opacity curve: Faint at base -> Peak bloom in mid air -> Dissipates into atmosphere
+          let targetOpacity = 0;
+          if (yProgress < 0.2) {
+            targetOpacity = (yProgress / 0.2) * 0.28;
+          } else if (yProgress < 0.7) {
+            targetOpacity = 0.28;
+          } else {
+            targetOpacity = Math.max(0, (1 - (yProgress - 0.7) / 0.3) * 0.28);
+          }
+          mat.opacity = targetOpacity;
+
+          // Loop particle back to hot burger surface
+          if (ap.mesh.position.y > 2.8) {
+            ap.mesh.position.y = 0.25 + Math.random() * 0.15;
+            ap.baseX = (Math.random() - 0.5) * 0.55;
+            ap.baseZ = (Math.random() - 0.5) * 0.55;
           }
         }
       });
 
-      // Embers floating drift
-      embers.forEach((em) => {
-        em.angle += em.speed * 0.01;
-        em.mesh.position.x = Math.cos(em.angle) * em.orbitR;
-        em.mesh.position.z = Math.sin(em.angle) * em.orbitR;
-        em.mesh.position.y = em.yBase + Math.sin(elapsed * 1.5 + em.angle) * 0.25;
+      // Warm glowing vapor motes
+      vaporMotes.forEach((vm) => {
+        if (isOpenEnough) {
+          vm.mesh.visible = true;
+          vm.mesh.position.y += vm.speed * 0.009;
+          vm.angle += vm.speed * 0.008;
+          vm.mesh.position.x = Math.cos(vm.angle) * vm.r;
+          vm.mesh.position.z = Math.sin(vm.angle) * vm.r;
+          if (vm.mesh.position.y > 2.4) {
+            vm.mesh.position.y = 0.35 + Math.random() * 0.2;
+          }
+        } else {
+          vm.mesh.visible = false;
+        }
       });
 
       // Space feast zero-g bobbing
@@ -568,10 +710,6 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
         glassGroup.position.y = 0.2 + Math.sin(elapsed * 1.5 + 2) * 0.12;
         friesGroup.position.y = 1.2 + Math.sin(elapsed * 1.3) * 0.08;
       }
-
-      // Orbital rings gentle sway
-      orbitRing1.rotation.z = elapsed * 0.08;
-      orbitRing2.rotation.z = -elapsed * 0.06;
 
       renderer.render(scene, camera);
     };
@@ -593,7 +731,7 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
 
   return (
     <div className="relative w-full h-[290px] sm:h-[380px] md:h-[460px] lg:h-[520px] select-none flex items-center justify-center my-1 sm:my-0">
-      {/* Dynamic Ambient Glow Behind 3D Centerpiece */}
+      {/* Warm Ambient Culinary Glow Behind Centerpiece */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[280px] sm:w-[440px] h-[280px] sm:h-[440px] bg-gradient-to-tr from-amber-600/20 via-orange-600/25 to-red-600/15 rounded-full blur-[80px] pointer-events-none" />
 
       {/* 3D WebGL Canvas Viewport with touch-action pan-y */}
@@ -605,7 +743,7 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
         }`}
       />
 
-      {/* Top Left: Michelin 3D Badge */}
+      {/* Top Left: Michelin Fresh Service Badge */}
       <div className="absolute top-3 left-3 bg-[#161a24]/90 backdrop-blur-md border border-amber-500/30 px-2.5 sm:px-3 py-1 rounded-full shadow-2xl flex items-center gap-1.5 pointer-events-none">
         <span className="flex h-1.5 w-1.5 relative">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -613,11 +751,11 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
         </span>
         <span className="text-[10px] sm:text-[11px] font-black tracking-wider uppercase text-amber-300 flex items-center gap-1">
           <Sparkles size={11} className="text-amber-400" />
-          {viewMode === 'cloche' ? '3D Cloche' : '3D Zero-G'}
+          {isClocheOpen ? 'Fresh Aroma Unveiled' : 'Chef Cloche Sealed'}
         </span>
       </div>
 
-      {/* Top Right: Mode Switcher (Royal Cloche vs Zero-G Feast) */}
+      {/* Top Right: Mode Switcher */}
       <div className="absolute top-3 right-3 flex items-center gap-1 bg-[#12151f]/90 backdrop-blur-md p-1 rounded-2xl border border-white/10 shadow-xl pointer-events-auto">
         <button
           onClick={() => handleSwitchMode('cloche')}
@@ -652,14 +790,14 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
           <span>Swipe 360°</span>
         </div>
 
-        {/* Center: Lift / Cover Cloche Trigger Button (Tactile 48px target on mobile) */}
+        {/* Center: Waiter Opening / Covering Dish Trigger Button */}
         {viewMode === 'cloche' && (
           <button
             onClick={handleToggleCloche}
             className="pointer-events-auto px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-black transition-all transform active:scale-90 shadow-xl flex items-center gap-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 text-black hover:brightness-110 shadow-orange-500/30"
           >
             <Flame size={13} className={isClocheOpen ? 'text-red-950 animate-bounce' : 'text-amber-950'} />
-            <span>{isClocheOpen ? 'Cover Dish' : 'Lift Cloche & Savor'}</span>
+            <span>{isClocheOpen ? 'Cover Burger' : 'Unveil Hot Burger'}</span>
           </button>
         )}
 
@@ -678,7 +816,7 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
         </button>
       </div>
 
-      {/* Floating Dish Info Pill (Visible when Cloche is open or in Space Mode) */}
+      {/* Floating Fresh Aroma Info Pill */}
       <AnimatePresence>
         {(isClocheOpen || viewMode === 'spaceFeast') && (
           <motion.div
@@ -693,7 +831,7 @@ export const LuxuryDining3DExperience: React.FC<LuxuryDining3DProps> = ({
             </div>
             <div className="text-left overflow-hidden">
               <p className="text-[10px] font-black text-white truncate">Flame Wagyu Brioche</p>
-              <p className="text-[8px] text-amber-400 font-bold tracking-wide">360° Realtime Ready</p>
+              <p className="text-[8px] text-amber-400 font-bold tracking-wide">Fresh Hot Aroma • Ready</p>
             </div>
           </motion.div>
         )}
