@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { UtensilsCrossed, ShoppingBag, Clock, QrCode } from 'lucide-react';
 import { useCartStore } from '../../store/useCartStore';
+import { useSessionStore } from '../../store/useSessionStore';
 
 interface AndroidBottomNavProps {
   onOpenCart?: () => void;
@@ -14,6 +15,7 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({ onOpenCart }
   const totalCartItems = useCartStore((state) =>
     state.items.reduce((acc, i) => acc + i.quantity, 0)
   );
+  const billRequested = useSessionStore((state) => state.billRequested);
 
   const pathname = location.pathname;
 
@@ -50,9 +52,10 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({ onOpenCart }
     },
     {
       id: 'tracking',
-      label: 'Order Status',
+      label: billRequested ? 'Live Bill' : 'Order Status',
       icon: Clock,
       active: pathname === '/tracking',
+      badgeText: billRequested ? 'BILL' : undefined,
       action: () => navigate('/tracking'),
     },
     {
@@ -93,6 +96,11 @@ export const AndroidBottomNav: React.FC<AndroidBottomNavProps> = ({ onOpenCart }
                 {!!item.badge && item.badge > 0 && (
                   <span className="absolute -top-1.5 -right-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-black text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-black shadow">
                     {item.badge}
+                  </span>
+                )}
+                {item.badgeText && (
+                  <span className="absolute -top-2 -right-3.5 bg-amber-500 text-black text-[8px] font-black px-1 rounded-full shadow animate-pulse">
+                    {item.badgeText}
                   </span>
                 )}
               </div>

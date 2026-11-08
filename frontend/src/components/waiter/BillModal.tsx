@@ -28,7 +28,7 @@ interface BillModalProps {
     onConfirmPayment?: (orderId: string, paymentData: PaymentData) => void;
 }
 
-type PaymentMethodType = 'CASH' | 'CARD' | 'MOMO' | 'ZALOPAY' | 'VNPAY';
+type PaymentMethodType = 'CASH' | 'CARD' | 'RAZORPAY' | 'MOMO' | 'ZALOPAY' | 'VNPAY';
 
 interface PaymentData {
     paymentMethod: PaymentMethodType;
@@ -307,7 +307,7 @@ const BillModal: React.FC<BillModalProps> = ({ order, onClose, onConfirmPayment 
                         <div>
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Payment Method</h3>
                             <div className="grid grid-cols-3 gap-2">
-                                {(['CASH', 'CARD', 'MOMO', 'ZALOPAY', 'VNPAY'] as PaymentMethodType[]).map((method) => (
+                                {(['CASH', 'RAZORPAY', 'CARD', 'MOMO', 'ZALOPAY', 'VNPAY'] as PaymentMethodType[]).map((method) => (
                                     <button
                                         key={method}
                                         onClick={() => setPaymentMethod(method)}

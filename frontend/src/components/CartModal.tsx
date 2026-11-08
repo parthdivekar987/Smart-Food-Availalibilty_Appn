@@ -5,13 +5,15 @@ import { useSessionStore } from '../store/useSessionStore';
 import { guestApi } from '../api/guestApi';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, ShoppingBag, ChefHat, X, Minus, Plus, FileText, Sparkles, ArrowRight, Utensils } from 'lucide-react';
+import { Trash2, ShoppingBag, ChefHat, X, Minus, Plus, FileText, Sparkles, ArrowRight, Utensils, Receipt } from 'lucide-react';
 import { getPhotoUrl } from '../utils/photoUrl';
 
 export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { items, totalAmount, clearCart, updateQuantity, removeFromCart } = useCartStore();
   const sessionId = useSessionStore(state => state.sessionId);
+  const activeOrderId = useSessionStore(state => state.activeOrderId);
   const setActiveOrder = useSessionStore(state => state.setActiveOrder);
+  const addOrderToHistory = useSessionStore(state => state.addOrderToHistory);
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderNotes, setOrderNotes] = useState('');
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -63,6 +65,8 @@ export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClos
             modifiers: [],
           }))
         });
+        // Save to persistent cart and order history for live billing calculation
+        addOrderToHistory(placedOrder, items);
       }
 
       setOrderSuccess(true);
@@ -168,13 +172,25 @@ export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClos
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex flex-col items-center justify-center py-16 text-center"
+                    className="flex flex-col items-center justify-center py-12 text-center"
                   >
-                    <div className="w-20 h-20 bg-gray-100 rounded-3xl flex items-center justify-center mb-4">
-                      <ShoppingBag size={32} className="text-gray-300" />
+                    <div className="w-16 h-16 bg-gray-100 rounded-3xl flex items-center justify-center mb-3">
+                      <ShoppingBag size={28} className="text-gray-300" />
                     </div>
-                    <h3 className="font-bold text-gray-600 mb-1">Nothing here yet</h3>
-                    <p className="text-sm text-gray-400">Browse the menu and add your favorite dishes</p>
+                    <h3 className="font-bold text-gray-700 mb-1">Your cart is empty</h3>
+                    <p className="text-xs text-gray-400 mb-4">Add dishes to place a new order</p>
+                    {activeOrderId && (
+                      <button
+                        onClick={() => {
+                          onClose();
+                          navigate('/tracking');
+                        }}
+                        className="py-2.5 px-4 rounded-xl bg-orange-50 border border-orange-200 text-orange-600 font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                      >
+                        <Receipt size={14} />
+                        <span>View Table Bill & Order Status</span>
+                      </button>
+                    )}
                   </motion.div>
                 ) : (
                   <AnimatePresence initial={false}>

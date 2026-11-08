@@ -287,14 +287,28 @@ export const getOrderBySession = async (sessionId: string) => {
 export const requestBill = async (orderId: string) => {
     const order = await prisma.order.findUnique({
         where: { id: orderId },
+        include: {
+            items: {
+                include: {
+                    menuItem: true,
+                    modifiers: { include: { modifierOption: true } },
+                },
+            },
+            tableSession: {
+                include: {
+                    table: true,
+                },
+            },
+        },
     });
 
     if (!order) {
         throw new Error("Order not found");
     }
 
+    // Idempotent: If bill is already requested, return the current order directly without error
     if (order.billRequested) {
-        throw new Error("Bill already requested");
+        return order;
     }
 
     // Update order to request bill (keep current status, just mark as bill requested)
@@ -317,6 +331,18 @@ export const requestBill = async (orderId: string) => {
             },
         },
     });
+
+    // Invalidate & refresh Redis cache so customer and staff get live updated bill data
+    try {
+        if (updatedOrder.tableSessionId) {
+            await redisService.del(`order:session:${updatedOrder.tableSessionId}`);
+            await redisService.set(`order:session:${updatedOrder.tableSessionId}`, updatedOrder, 3600);
+        }
+        await redisService.del(`order:id:${updatedOrder.id}`);
+        await redisService.set(`order:id:${updatedOrder.id}`, updatedOrder, 3600);
+    } catch (cacheErr) {
+        console.warn("Redis cache update warning on requestBill:", cacheErr);
+    }
 
     return updatedOrder;
 };

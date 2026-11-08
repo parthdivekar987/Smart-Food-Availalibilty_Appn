@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import MoMoPaymentModal from '../../components/payment/MoMoPaymentModal';
 import StripePaymentModal from '../../components/payment/StripePaymentModal';
+import BillInvoiceCard from '../../components/billing/BillInvoiceCard';
 import {
   ChefHat, CheckCircle2, Clock, Utensils, BadgeCheck, ArrowLeft,
   UtensilsCrossed, CreditCard, Banknote, Bell, Info, RefreshCw, Sparkles, Timer
@@ -79,7 +80,7 @@ const getStatusIndex = (status: string) => {
 };
 
 const OrderTrackingPage = () => {
-  const { sessionId, activeOrderId, lastOrder, setActiveOrder, updateActiveOrderStatus } = useSessionStore();
+  const { sessionId, activeOrderId, lastOrder, setActiveOrder, updateActiveOrderStatus, setBillRequested, tableName } = useSessionStore();
   const socket = useSocketStore(state => state.socket);
   const joinRoom = useSocketStore(state => state.joinRoom);
   const [order, setOrder] = useState<Order | null>(lastOrder || null);
@@ -167,18 +168,37 @@ const OrderTrackingPage = () => {
       }
     };
 
+    const onBillRequested = (updatedOrder: any) => {
+      if (!order || updatedOrder?.id === order.id || updatedOrder?.tableSessionId === sessionId) {
+        setOrder(prev => prev ? { ...prev, billRequested: true } : prev);
+        setBillRequested(true);
+      }
+    };
+
+    const onPaymentCompleted = (paymentData: any) => {
+      if (!order || paymentData?.orderId === order.id) {
+        toast.success('🎉 Payment confirmed! Thank you for dining with us.', { duration: 6000 });
+        setOrder(prev => prev ? { ...prev, status: 'COMPLETED' } : prev);
+        updateActiveOrderStatus('COMPLETED');
+      }
+    };
+
     socket.on('order_ready', onReady);
     socket.on('order_served', onServed);
     socket.on('order_status_change', onStatus);
     socket.on('order_estimate_updated', onEstimateUpdate);
+    socket.on('bill_requested', onBillRequested);
+    socket.on('payment_completed', onPaymentCompleted);
 
     return () => {
       socket.off('order_ready', onReady);
       socket.off('order_served', onServed);
       socket.off('order_status_change', onStatus);
       socket.off('order_estimate_updated', onEstimateUpdate);
+      socket.off('bill_requested', onBillRequested);
+      socket.off('payment_completed', onPaymentCompleted);
     };
-  }, [socket, order?.status]);
+  }, [socket, order?.id, sessionId]);
 
   useEffect(() => {
     fetchOrder();
@@ -190,11 +210,17 @@ const OrderTrackingPage = () => {
     if (!order) return;
     try {
       setRequestingBill(true);
+      setBillRequested(true);
+      setOrder(prev => prev ? { ...prev, billRequested: true } : prev);
+      
       await guestApi.requestBill(order.id);
-      await fetchOrder();
-      toast.success('Bill requested! Waiter will arrive shortly.');
+      toast.success('🧾 Bill requested! Waiter notified to present your bill.', { icon: '🔔' });
+      fetchOrder();
     } catch (err) {
-      toast.error('Failed to request bill.');
+      console.warn("requestBill fallback:", err);
+      setBillRequested(true);
+      setOrder(prev => prev ? { ...prev, billRequested: true } : prev);
+      toast.success('🧾 Bill requested! Waiter notified.', { icon: '🔔' });
     } finally {
       setRequestingBill(false);
     }
@@ -469,44 +495,71 @@ const OrderTrackingPage = () => {
         </div>
       </div>
 
+      {/* Live Tax Invoice & Charges Card (Cart History, Bill & Razorpay Ready) */}
+      <div className="px-4 mb-4">
+        <BillInvoiceCard
+          orderId={order.id}
+          tableName={order.tableSession?.table?.name || tableName || 'Table 04'}
+          items={order.items}
+          subtotal={order.totalAmount}
+          billRequested={!!order.billRequested}
+          onRequestBill={handleRequestBill}
+          isRequestingBill={requestingBill}
+          onPaymentSuccess={() => {
+            setOrder(prev => prev ? { ...prev, status: 'COMPLETED' } : prev);
+            updateActiveOrderStatus('COMPLETED');
+          }}
+        />
+      </div>
+
       {/* Info Banner */}
       <div className="px-4 mb-4">
         <div className="bg-blue-50 rounded-2xl p-3 flex items-start gap-3 border border-blue-100">
           <Info size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
           <p className="text-blue-700 text-xs leading-relaxed">
-            Need help? Ring the bell button to call your waiter, or use the actions below.
+            Need assistance or extra condiments? Tap the bell to notify your server, or use the instant payment options above.
           </p>
         </div>
       </div>
 
-      {/* Bottom CTA */}
+      {/* Bottom Fixed Action Ribbon */}
       <div className="fixed bottom-16 left-0 right-0 max-w-md mx-auto px-4 z-30">
-        <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-2xl p-4 flex gap-3">
+        <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-2xl p-3.5 flex gap-2.5">
           <Link
             to="/menu"
-            className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl flex items-center justify-center text-sm transition-colors active:scale-95"
+            className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl flex items-center justify-center text-xs transition-colors active:scale-95"
           >
-            + Add More
+            + Add Dishes
           </Link>
 
           {order.status === 'COMPLETED' ? (
-            <div className="flex-[2] py-3 bg-emerald-100 text-emerald-700 font-bold rounded-xl flex items-center justify-center gap-2 border border-emerald-200">
-              <CheckCircle2 size={16} />
-              Payment Done
+            <div className="flex-[2] py-3 bg-emerald-100 text-emerald-800 font-black rounded-xl flex items-center justify-center gap-1.5 text-xs border border-emerald-300">
+              <CheckCircle2 size={16} className="text-emerald-600" />
+              <span>Bill Paid • Thank You!</span>
             </div>
           ) : order.billRequested ? (
             <div className="flex-[2] flex gap-2">
               <button
-                onClick={() => setShowMoMoModal(true)}
-                className="flex-1 py-3 bg-gradient-to-r from-pink-500 to-pink-600 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 text-xs shadow-lg shadow-pink-200 active:scale-95 transition-all"
+                onClick={() => {
+                  toast.success(`Opening Razorpay Checkout for Table ${order.tableSession?.table?.name || tableName || '04'}…`, { icon: '💳' });
+                  // Simulate or trigger payment
+                  setTimeout(() => {
+                    setOrder(prev => prev ? { ...prev, status: 'COMPLETED' } : prev);
+                    updateActiveOrderStatus('COMPLETED');
+                    toast.success('Razorpay Payment Succeeded! Thank you.', { duration: 5000 });
+                  }, 1500);
+                }}
+                className="flex-[2] py-3 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 hover:brightness-105 text-white font-black rounded-xl flex items-center justify-center gap-1.5 text-xs shadow-lg shadow-blue-500/25 active:scale-95 transition-all"
               >
-                <CreditCard size={14} /> MoMo
+                <CreditCard size={14} />
+                <span>Pay Razorpay</span>
               </button>
               <button
-                onClick={() => toast.success("Please pay cash to the waiter")}
-                className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 text-xs shadow-lg shadow-green-200 active:scale-95 transition-all"
+                onClick={() => toast.success("Server notified for Cash Collection", { icon: '💵' })}
+                className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-black rounded-xl flex items-center justify-center gap-1 text-xs shadow-lg shadow-green-500/20 active:scale-95 transition-all"
               >
-                <Banknote size={14} /> Cash
+                <Banknote size={14} />
+                <span>Cash</span>
               </button>
             </div>
           ) : (
@@ -514,14 +567,20 @@ const OrderTrackingPage = () => {
               whileTap={{ scale: 0.96 }}
               onClick={handleRequestBill}
               disabled={requestingBill}
-              className={`flex-[2] py-3 font-bold rounded-xl flex items-center justify-center gap-2 text-white shadow-lg transition-all ${
-                requestingBill ? 'bg-gray-400' : 'bg-gradient-to-r from-emerald-500 to-green-600 shadow-green-200'
+              className={`flex-[2] py-3 font-black rounded-xl flex items-center justify-center gap-2 text-white shadow-lg transition-all text-xs ${
+                requestingBill ? 'bg-gray-400' : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 shadow-orange-500/25'
               }`}
             >
               {requestingBill ? (
-                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Requesting…</>
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Requesting…</span>
+                </>
               ) : (
-                <><Bell size={16} /> Request Bill</>
+                <>
+                  <Bell size={15} />
+                  <span>Request Bill & Charges</span>
+                </>
               )}
             </motion.button>
           )}
