@@ -54,9 +54,11 @@ function App() {
       <Suspense fallback={<PageLoadingFallback />}>
         <Routes>
 
+          {/* Luxury 3D Landing Page (Full-Width Experience) */}
+          <Route path="/" element={<EntryPoint />} />
+
           {/* Guest Flow */}
           <Route element={<GuestLayout />}>
-            <Route path="/" element={<EntryPoint />} />
             <Route path="/tracking" element={<OrderTrackingPage />} />
           </Route>
           <Route path="/menu" element={<MenuPage />} />
