@@ -26,6 +26,9 @@ services:
         generateValue: true
       # The Netlify site that guests use (CORS, QR codes, email/OAuth links)
       - key: FRONTEND_URL
+        value: https://delicate-gaufre-bdd7c8.netlify.app
+      # Other sites allowed to call the API (comma separated, no trailing slash)
+      - key: CORS_ORIGINS
         value: https://classy-narwhal-45c73a.netlify.app
       - key: ALLOW_WALK_IN
         value: "true"
