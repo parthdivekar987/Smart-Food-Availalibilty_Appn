@@ -55,3 +55,6 @@ coverage/
 .cache/
 .npm/
 .eslintcache
+
+# Printable table QR codes (contain signed table tokens)
+table-qr-codes/

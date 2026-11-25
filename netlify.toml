@@ -7,6 +7,9 @@
 [build.environment]
   # Vite 7 needs Node 20.19+
   NODE_VERSION = "22"
+  # Public backend (Render service from render.yaml). Override in Netlify > Environment variables if it differs.
+  VITE_API_BASE_URL = "https://smartfood-restaurant-api-pd.onrender.com/api/v1"
+  VITE_FRONTEND_URL = "https://classy-narwhal-45c73a.netlify.app"
 
 # Single-page app: let React Router handle every path (fixes 404 on refresh / deep links)
 [[redirects]]

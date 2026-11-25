@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { guestApi, PublicTable } from '../api/guestApi';
 import { getApiErrorMessage } from '../api/axiosClient';
@@ -57,75 +57,150 @@ const EntryPoint: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Initialize Scanner when modal opens
-  useEffect(() => {
-    let html5QrCode: any;
-
-    if (showScanner) {
-      import('html5-qrcode').then(({ Html5Qrcode }) => {
-        html5QrCode = new Html5Qrcode("reader");
-      });
-    }
-
-    return () => {
-      if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().catch((err: any) => console.error(err));
+  /**
+   * Decode a QR code from a photo. Phone photos are large (12+ MP) and often slightly blurred,
+   * so: 1) the browser's native BarcodeDetector (Android Chrome; very robust), then
+   * 2) html5-qrcode on downscaled copies of the image at a few sizes.
+   */
+  const decodeQrFromPhoto = async (file: File): Promise<string> => {
+    const bitmap = await createImageBitmap(file);
+    const NativeDetector = (window as any).BarcodeDetector;
+    if (NativeDetector) {
+      try {
+        const detector = new NativeDetector({ formats: ['qr_code'] });
+        const codes = await detector.detect(bitmap);
+        if (codes?.[0]?.rawValue) return codes[0].rawValue;
+      } catch {
+        /* fall through to the JS decoder */
       }
+    }
+    const { Html5Qrcode } = await import('html5-qrcode');
+    const decoder = new Html5Qrcode('reader-file');
+    for (const maxSide of [1600, 1000, 700]) {
+      const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+      if (!blob) continue;
+      try {
+        return await decoder.scanFile(new File([blob], 'qr.jpg', { type: 'image/jpeg' }), false);
+      } catch {
+        /* try the next size */
+      }
+    }
+    throw new Error('No QR code found');
+  };
+
+  // ── QR scanner ───────────────────────────────────────────────
+  // One scanner instance per open modal, so closing the modal always releases the camera.
+  const scannerRef = useRef<any>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  // Browsers only expose the camera to secure pages (HTTPS or localhost)
+  const cameraSupported = typeof window !== 'undefined' && window.isSecureContext && !!navigator.mediaDevices?.getUserMedia;
+
+  const stopCamera = async () => {
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
+    setCameraActive(false);
+    if (scanner) {
+      try {
+        if (scanner.isScanning) await scanner.stop();
+        scanner.clear?.();
+      } catch {
+        /* already stopped */
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!showScanner) stopCamera();
+    return () => {
+      stopCamera();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showScanner]);
 
+  /** Accept only this restaurant's table codes; route inside the app (never open arbitrary links) */
+  const openScannedCode = (decodedText: string) => {
+    try {
+      const url = new URL(decodedText.trim(), window.location.origin);
+      const scannedTable = url.searchParams.get('tableId');
+      const scannedToken = url.searchParams.get('token');
+      if (!scannedTable || !scannedToken) throw new Error('not a table code');
+      triggerHaptic(35);
+      stopCamera();
+      setShowScanner(false);
+      navigate(`/?tableId=${encodeURIComponent(scannedTable)}&token=${encodeURIComponent(scannedToken)}`);
+    } catch {
+      setScanError("That QR code isn't a table code from this restaurant. Please scan the code on your table.");
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      triggerHaptic(20);
-      const file = e.target.files[0];
-      setScanError(null);
-
-      try {
-        const { Html5Qrcode } = await import('html5-qrcode');
-        const html5QrCode = new Html5Qrcode("reader");
-        const decodedText = await html5QrCode.scanFile(file, true);
-
-        console.log("Scanned from file:", decodedText);
-        setShowScanner(false);
-        window.location.href = decodedText;
-      } catch (err) {
-        console.error(err);
-        setScanError("Could not find a valid table QR code in this image. Please try a clearer photo.");
-      }
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow the same photo to be chosen again
+    if (!file) return;
+    triggerHaptic(20);
+    setScanError(null);
+    try {
+      await stopCamera();
+      const decodedText = await decodeQrFromPhoto(file);
+      openScannedCode(decodedText);
+    } catch (err) {
+      console.error(err);
+      setScanError('No QR code found in that photo. Hold the phone steady, fill the frame with the code, and try again.');
     }
   };
 
   const startCamera = async () => {
     triggerHaptic(20);
     setScanError(null);
+    if (!cameraSupported) {
+      setScanError(
+        'Live camera scanning needs a secure (https) connection. Use "Take a photo of the QR code" below, or scan with your phone\'s camera app.'
+      );
+      return;
+    }
     try {
-      const { Html5Qrcode } = await import('html5-qrcode');
-      const html5QrCode = new Html5Qrcode("reader");
-
-      await html5QrCode.start(
-        { facingMode: { ideal: "environment" } },
+      await stopCamera();
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
+      const scanner = new Html5Qrcode('reader', {
+        verbose: false,
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      });
+      scannerRef.current = scanner;
+      await scanner.start(
+        { facingMode: { ideal: 'environment' } },
         {
           fps: 15,
           qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-            const qrboxEdge = Math.floor(minEdge * 0.72);
-            return { width: Math.max(200, qrboxEdge), height: Math.max(200, qrboxEdge) };
+            const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72);
+            return { width: Math.max(200, edge), height: Math.max(200, edge) };
           },
         },
-        (decodedText: string) => {
-          triggerHaptic(35);
-          console.log("Scanned from Android camera:", decodedText);
-          html5QrCode.stop();
-          setShowScanner(false);
-          window.location.href = decodedText;
-        },
+        (decodedText: string) => openScannedCode(decodedText),
         () => {
-          // Ignore parsing noise
+          /* no code in this frame */
         }
       );
-    } catch (err) {
-      console.error("Camera start failed", err);
-      setScanError("Unable to access Android camera. Please check camera permissions in Chrome settings.");
+      setCameraActive(true);
+    } catch (err: any) {
+      console.error('Camera start failed', err);
+      scannerRef.current = null;
+      setCameraActive(false);
+      const name = err?.name || String(err);
+      if (/NotAllowed|Permission/i.test(name)) {
+        setScanError('Camera permission was denied. Allow camera access for this site in your browser settings, then try again.');
+      } else if (/NotFound|Overconstrained|DevicesNotFound/i.test(name)) {
+        setScanError('No camera was found on this device. Use "Take a photo of the QR code" instead.');
+      } else if (/NotReadable|TrackStart|in use/i.test(name)) {
+        setScanError('The camera is being used by another app. Close it and try again.');
+      } else {
+        setScanError('Could not start the camera. Use "Take a photo of the QR code" below instead.');
+      }
     }
   };
 
@@ -793,10 +868,16 @@ const EntryPoint: React.FC = () => {
 
               {/* Camera Viewport */}
               <div id="reader" className="w-full bg-black/60 rounded-2xl overflow-hidden min-h-[260px] sm:min-h-[280px] mb-3.5 relative border border-white/10">
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-gray-500 text-xs">Tap Activate Camera below</p>
-                </div>
+                {!cameraActive && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-6 text-center">
+                    <p className="text-gray-500 text-xs">
+                      {cameraSupported ? 'Tap "Start camera" below' : 'Live camera needs https on this connection. Take a photo of the QR code instead.'}
+                    </p>
+                  </div>
+                )}
               </div>
+              {/* Off-screen element used only to decode photos */}
+              <div id="reader-file" className="hidden" />
 
               {scanError && (
                 <div className="mb-3.5 p-2.5 bg-red-500/15 border border-red-500/30 text-red-400 text-xs rounded-xl w-full text-center">
@@ -805,25 +886,27 @@ const EntryPoint: React.FC = () => {
               )}
 
               <div className="flex flex-col gap-2.5 w-full">
-                <button
-                  onClick={startCamera}
-                  className="w-full py-3.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 text-black rounded-xl font-black shadow-lg shadow-orange-500/20 hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm min-h-[48px] touch-manipulation"
-                >
-                  <Camera size={18} />
-                  <span>Activate Android Camera</span>
-                </button>
-
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  <button className="w-full py-3 border border-white/15 bg-white/5 text-gray-200 rounded-xl font-bold hover:bg-white/10 transition-colors text-center text-xs min-h-[44px]">
-                    Upload QR Image from Gallery
+                {cameraSupported && (
+                  <button
+                    onClick={cameraActive ? stopCamera : startCamera}
+                    className="w-full py-3.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 text-black rounded-xl font-black shadow-lg shadow-orange-500/20 hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-2 text-xs sm:text-sm min-h-[48px] touch-manipulation"
+                  >
+                    <Camera size={18} />
+                    <span>{cameraActive ? 'Stop camera' : 'Start camera'}</span>
                   </button>
-                </div>
+                )}
+
+                {/* Works on any connection: opens the phone camera, then decodes the photo */}
+                <label className={`w-full py-3 rounded-xl font-bold transition-colors text-center text-xs min-h-[44px] flex items-center justify-center gap-2 cursor-pointer ${cameraSupported ? 'border border-white/15 bg-white/5 text-gray-200 hover:bg-white/10' : 'bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 text-black font-black'}`}>
+                  <input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} className="sr-only" />
+                  <Camera size={16} />
+                  Take a photo of the QR code
+                </label>
+
+                <label className="w-full py-2.5 text-gray-400 hover:text-gray-200 text-center text-xs cursor-pointer">
+                  <input type="file" accept="image/*" onChange={handleFileUpload} className="sr-only" />
+                  or choose a picture from your gallery
+                </label>
 
                 <div className="pt-1.5 text-center">
                   <button

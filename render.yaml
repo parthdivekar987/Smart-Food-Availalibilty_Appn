@@ -1,0 +1,35 @@
+# Render Blueprint: deploys the Express + Socket.IO backend.
+# One-click: https://render.com/deploy?repo=https://github.com/parthdivekar987/Smart-Food-Availalibilty_Appn
+# You will be asked for DATABASE_URL (your existing PostgreSQL / Neon connection string).
+services:
+  - type: web
+    name: smartfood-restaurant-api-pd
+    runtime: node
+    plan: free
+    rootDir: backend
+    # --include=dev: TypeScript and the Prisma CLI are dev dependencies but are needed to build
+    buildCommand: npm ci --include=dev && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REFRESH_SECRET_KEY
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      # The Netlify site that guests use (CORS, QR codes, email/OAuth links)
+      - key: FRONTEND_URL
+        value: https://classy-narwhal-45c73a.netlify.app
+      - key: ALLOW_WALK_IN
+        value: "true"
+      - key: TAX_RATE
+        value: "0.05"
+      - key: PAYMENT_CURRENCY
+        value: inr
