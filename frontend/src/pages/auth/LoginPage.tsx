@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authApi } from '../../api/authApi';
+import { API_BASE_URL } from '../../api/axiosClient';
 import { useAuthStore } from '../../store/useAuthStore';
 import {
   Mail, Lock, Eye, EyeOff, User, Sparkles,
@@ -20,44 +21,41 @@ export const LoginPage = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Seamless Instant Demo Login (Works 100% offline or on Netlify)
-  const performDemoLogin = async (role: string, name: string, userEmail: string) => {
+  const routeForRole = (role: string) => {
+    if (role === 'SUPER_ADMIN' || role === 'ADMIN') return '/admin';
+    if (role === 'WAITER') return '/waiter';
+    if (role === 'KITCHEN') return '/kitchen';
+    return '/';
+  };
+
+  const signIn = async (userEmail: string, userPassword: string) => {
+    const data = await authApi.login(userEmail, userPassword);
+    login(data.user, data.accessToken, data.refreshToken);
+    toast.success(`Welcome back, ${data.user.fullName || 'there'}!`);
+    navigate(routeForRole(data.user.role));
+  };
+
+  const describeError = (err: any) => {
+    if (!err?.response) return 'Cannot reach the server. Please check that the backend is running.';
+    if (err.response.status === 401) return 'Invalid email or password.';
+    return err.response.data?.message || err.response.data?.error || 'Authentication failed.';
+  };
+
+  // Demo accounts created by the database seed (password: 123456)
+  const signInAsDemo = async (demoEmail: string) => {
+    setError('');
+    setIsLoading(true);
     try {
-      const data = await authApi.login(userEmail, '123456');
-      if (data && data.accessToken) {
-        login(data.user, data.accessToken, data.refreshToken);
-        toast.success(`Welcome ${name}! (${role})`);
-        if (role === 'SUPER_ADMIN' || role === 'ADMIN') navigate('/admin');
-        else if (role === 'WAITER') navigate('/waiter');
-        else if (role === 'KITCHEN') navigate('/kitchen');
-        else navigate('/menu');
-        return;
-      }
-    } catch (_) {
-      // Seamless fallback to demo token
+      await signIn(demoEmail, '123456');
+    } catch (err: any) {
+      setError(describeError(err));
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    const mockUser = {
-      id: `demo-${role.toLowerCase()}-${Date.now()}`,
-      email: userEmail,
-      fullName: name,
-      role: role,
-      isVerified: true,
-      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
-    };
-    const mockToken = `demo-${role.toLowerCase()}-token-${Date.now()}`;
-    login(mockUser, mockToken, mockToken);
-    toast.success(`Welcome ${name}! (${role})`);
-
-    if (role === 'SUPER_ADMIN' || role === 'ADMIN') {
-      navigate('/admin');
-    } else if (role === 'WAITER') {
-      navigate('/waiter');
-    } else if (role === 'KITCHEN') {
-      navigate('/kitchen');
-    } else {
-      navigate('/menu');
-    }
+  const handleGoogleLogin = () => {
+    window.location.href = `${API_BASE_URL}/auth/google`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,49 +65,15 @@ export const LoginPage = () => {
 
     try {
       if (isLoginMode) {
-        // Attempt backend login first
-        try {
-          const data = await authApi.login(email, password);
-          login(data.user, data.accessToken, data.refreshToken);
-          toast.success(`Welcome back, ${data.user.fullName || 'User'}!`);
-
-          if (data.user.role === 'ADMIN' || data.user.role === 'SUPER_ADMIN') {
-            navigate('/admin');
-          } else if (data.user.role === 'WAITER') {
-            navigate('/waiter');
-          } else if (data.user.role === 'KITCHEN') {
-            navigate('/kitchen');
-          } else {
-            navigate('/menu');
-          }
-          return;
-        } catch (apiErr: any) {
-          // If server is unreachable or demo credentials used, activate demo mode
-          const lowerEmail = email.toLowerCase();
-          if (lowerEmail.includes('admin')) {
-            performDemoLogin('SUPER_ADMIN', 'Super Admin', email);
-            return;
-          } else if (lowerEmail.includes('waiter')) {
-            performDemoLogin('WAITER', 'John Waiter', email);
-            return;
-          } else if (lowerEmail.includes('kitchen')) {
-            performDemoLogin('KITCHEN', 'Chef Gordon', email);
-            return;
-          } else if (!apiErr.response || apiErr.code === 'ERR_NETWORK') {
-            performDemoLogin('CUSTOMER', fullName || 'Valued Guest', email);
-            return;
-          }
-          throw apiErr;
-        }
+        await signIn(email, password);
       } else {
         const response = await authApi.register(email, password, fullName);
-        toast.success(response.message || 'Registration successful! You can now log in.');
+        toast.success(response.message || 'Registration successful! Please check your email to verify your account.');
         setIsLoginMode(true);
         setPassword('');
       }
     } catch (err: any) {
-      console.error(err);
-      setError(err.response?.data?.message || 'Authentication failed. Please check credentials or use Quick Demo buttons below.');
+      setError(describeError(err));
     } finally {
       setIsLoading(false);
     }
@@ -311,78 +275,58 @@ export const LoginPage = () => {
                   </span>
                 </div>
 
-                {/* Social Auth Icons */}
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => performDemoLogin('CUSTOMER', 'Google Guest', 'google@guest.com')}
-                    className="flex items-center justify-center py-2 bg-white rounded-xl hover:bg-gray-100 transition-colors"
-                    title="Google"
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24">
-                      <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"/>
-                      <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
-                      <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3 0-.8.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12 0 14.5s.7 4.8 1.9 7.2l3.7-2.9z"/>
-                      <path fill="#34A853" d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.9C3.7 20.6 7.5 23.5 12 23.5z"/>
-                    </svg>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => performDemoLogin('CUSTOMER', 'Github Guest', 'github@guest.com')}
-                    className="flex items-center justify-center py-2 bg-white rounded-xl hover:bg-gray-100 transition-colors"
-                    title="GitHub"
-                  >
-                    <svg className="w-4 h-4 fill-gray-900" viewBox="0 0 24 24">
-                      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-                    </svg>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => performDemoLogin('CUSTOMER', 'Meta Guest', 'facebook@guest.com')}
-                    className="flex items-center justify-center py-2 bg-white rounded-xl hover:bg-gray-100 transition-colors"
-                    title="Facebook"
-                  >
-                    <svg className="w-4 h-4 fill-[#1877F2]" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                    </svg>
-                  </button>
-                </div>
+                {/* Social Auth */}
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-white rounded-xl hover:bg-gray-100 transition-colors text-gray-800 text-xs font-bold"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"/>
+                    <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
+                    <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3 0-.8.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12 0 14.5s.7 4.8 1.9 7.2l3.7-2.9z"/>
+                    <path fill="#34A853" d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.9C3.7 20.6 7.5 23.5 12 23.5z"/>
+                  </svg>
+                  Continue with Google
+                </button>
 
                 {/* 1-Click Instant Portals Access */}
                 <div className="mt-4 pt-3 border-t border-white/10">
                   <p className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2 text-center">
-                    Quick Portals Demo
+                    Demo accounts (password 123456)
                   </p>
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       type="button"
-                      onClick={() => performDemoLogin('SUPER_ADMIN', 'Super Admin', 'admin@restaurant.com')}
+                      onClick={() => signInAsDemo('admin@restaurant.com')}
+                      disabled={isLoading}
                       className="py-1.5 px-2 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 rounded-lg text-[10px] font-black text-orange-400 transition-colors text-center"
                     >
                       Admin Demo →
                     </button>
                     <button
                       type="button"
-                      onClick={() => performDemoLogin('WAITER', 'John Waiter', 'waiter@restaurant.com')}
+                      onClick={() => signInAsDemo('waiter@restaurant.com')}
+                      disabled={isLoading}
                       className="py-1.5 px-2 bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 rounded-lg text-[10px] font-black text-blue-400 transition-colors text-center"
                     >
                       Waiter Staff →
                     </button>
                     <button
                       type="button"
-                      onClick={() => performDemoLogin('KITCHEN', 'Chef Gordon', 'kitchen@restaurant.com')}
+                      onClick={() => signInAsDemo('kitchen@restaurant.com')}
+                      disabled={isLoading}
                       className="py-1.5 px-2 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 rounded-lg text-[10px] font-black text-emerald-400 transition-colors text-center"
                     >
                       Kitchen Staff →
                     </button>
                     <button
                       type="button"
-                      onClick={() => navigate('/menu')}
+                      onClick={() => signInAsDemo('customer@restaurant.com')}
+                      disabled={isLoading}
                       className="py-1.5 px-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-[10px] font-black text-amber-300 transition-colors text-center"
                     >
-                      Dine-In Menu →
+                      Customer Demo →
                     </button>
                   </div>
                 </div>

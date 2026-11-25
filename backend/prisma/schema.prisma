@@ -126,6 +126,26 @@ model TableSession {
   table     Table @relation(fields: [tableId], references: [id])
   waiter    User? @relation(fields: [waiterId], references: [id])
   order     Order?
+  events    TableSessionEvent[]
+}
+
+/// Audit trail of everything that happens during a table session (cart adds, orders,
+/// staff additions, bill requests, payment, checkout). Powers the admin Live Tables view.
+model TableSessionEvent {
+  id             String   @id @default(uuid())
+  tableSessionId String
+  /// SESSION_STARTED | CART_ITEM_ADDED | ORDER_PLACED | STAFF_ADDED_ITEMS | BILL_REQUESTED | PAYMENT_COMPLETED | SESSION_CLOSED
+  type           String
+  /// GUEST | STAFF | SYSTEM
+  actor          String
+  actorName      String?
+  message        String
+  data           Json?
+  createdAt      DateTime @default(now())
+
+  tableSession   TableSession @relation(fields: [tableSessionId], references: [id], onDelete: Cascade)
+
+  @@index([tableSessionId, createdAt])
 }
 
 //

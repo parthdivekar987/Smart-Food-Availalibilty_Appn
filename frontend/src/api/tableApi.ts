@@ -3,24 +3,7 @@ import { Table } from "../types";
 
 export const tableApi = {
     // 1. Get List of Tables
-    getTables: async () => {
-        try {
-            return await axiosClient.get<{ data: Table[] }>("/tables");
-        } catch (e) {
-            console.warn("Using mock tables:", e);
-            const mockTables: Table[] = [
-                { id: 'tbl-1', name: 'Table 01 (VIP Booth)', capacity: 4, isActive: true, restaurantId: 'r1' },
-                { id: 'tbl-2', name: 'Table 02 (Window)', capacity: 2, isActive: true, restaurantId: 'r1' },
-                { id: 'tbl-3', name: 'Table 03 (Window)', capacity: 2, isActive: false, restaurantId: 'r1' },
-                { id: 'tbl-4', name: 'Table 04 (Main Hall)', capacity: 4, isActive: true, restaurantId: 'r1' },
-                { id: 'tbl-5', name: 'Table 05 (Family Dining)', capacity: 6, isActive: true, restaurantId: 'r1' },
-                { id: 'tbl-6', name: 'Table 06 (Terrace Patio)', capacity: 4, isActive: false, restaurantId: 'r1' },
-                { id: 'tbl-7', name: 'Table 07 (Terrace Patio)', capacity: 4, isActive: true, restaurantId: 'r1' },
-                { id: 'tbl-8', name: 'Table 08 (Banquet Suite)', capacity: 8, isActive: true, restaurantId: 'r1' },
-            ];
-            return { data: mockTables } as any;
-        }
-    },
+    getTables: () => axiosClient.get<{ data: Table[] }>("/tables"),
 
     // 2. Create Table
     // Response: Table object

@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import axiosClient from '../../api/axiosClient';
+import axiosClient, { getApiErrorMessage } from '../../api/axiosClient';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import { ui } from '../../utils/swalHelper';
 import { getPhotoUrl } from '../../utils/photoUrl';
-import { MOCK_ITEMS, saveLocalMenuItems } from '../../api/mockData';
 
 interface Photo {
   id: string;
@@ -40,97 +39,36 @@ export default function PhotoManager({ itemId, photos = [], onRefresh }: { itemI
       toast.success("Images uploaded successfully!", { id: loadId, duration: 2000 });
       onRefresh();
     } catch (err) {
-      console.warn("Backend upload offline/failed. Falling back to local image reader:", err);
-      try {
-        // Read selected images (JPEG, PNG, WebP) as Data URLs for instant preview & offline persistence
-        const newLocalPhotos: Photo[] = [];
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          const dataUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          });
-
-          newLocalPhotos.push({
-            id: `photo-${Date.now()}-${i}`,
-            url: dataUrl,
-            isPrimary: (currentPhotos.length === 0 && i === 0)
-          });
-        }
-
-        const merged = [...currentPhotos, ...newLocalPhotos];
-        setCurrentPhotos(merged);
-
-        // Update MOCK_ITEMS in memory
-        const targetMock = MOCK_ITEMS.find(m => m.id === itemId);
-        if (targetMock) {
-          targetMock.photos = merged as any;
-          saveLocalMenuItems();
-        }
-
-        toast.success(`${files.length} image(s) uploaded successfully!`, { id: loadId, duration: 2500 });
-        onRefresh();
-      } catch (readErr) {
-        toast.error("Could not process image file. Please use JPEG or PNG.", { id: loadId });
-      }
+      toast.error(getApiErrorMessage(err, "Upload failed. Please use JPEG, PNG or WebP under 5MB."), { id: loadId });
     } finally {
       setUploading(false);
-      // Reset input value to allow re-uploading the same file if needed
-      e.target.value = '';
+      // Reset input value to allow re-uploading the same file
+      e.target.value = "";
     }
   };
 
   const handleDelete = async (photoId: string) => {
-    const result = await ui.confirmDelete(
-      "Delete photo?", 
-      "This photo will be removed from the item menu."
-    );
-
-    if (result.isConfirmed) {
-      try {
-        await axiosClient.delete(`/menu/photos/${photoId}`);
-      } catch (err) {
-        console.warn("Backend offline, removing photo locally", err);
-      }
-
-      const updated = currentPhotos.filter(p => p.id !== photoId);
-      if (updated.length > 0 && !updated.some(p => p.isPrimary)) {
-        updated[0].isPrimary = true;
-      }
-      setCurrentPhotos(updated);
-
-      const targetMock = MOCK_ITEMS.find(m => m.id === itemId);
-      if (targetMock && targetMock.photos) {
-        targetMock.photos = updated as any;
-      }
-
+    const result = await ui.confirmDelete("Delete photo?", "This photo will be removed from the menu item.");
+    if (!result.isConfirmed) return;
+    try {
+      await axiosClient.delete(`/menu/photos/${photoId}`);
+      setCurrentPhotos((prev) => prev.filter((p) => p.id !== photoId));
       ui.alertSuccess("Photo deleted!");
       onRefresh();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Failed to delete photo"));
     }
   };
 
   const handleSetPrimary = async (photoId: string) => {
     try {
-      await axiosClient.patch('/menu/photos/set-primary', { photoId, itemId });
+      await axiosClient.patch("/menu/photos/set-primary", { photoId, itemId });
+      setCurrentPhotos((prev) => prev.map((p) => ({ ...p, isPrimary: p.id === photoId })));
+      toast.success("Primary photo updated");
+      onRefresh();
     } catch (err) {
-      console.warn("Backend offline, updating primary photo locally", err);
+      toast.error(getApiErrorMessage(err, "Failed to update primary photo"));
     }
-
-    const updated = currentPhotos.map(p => ({
-      ...p,
-      isPrimary: p.id === photoId
-    }));
-    setCurrentPhotos(updated);
-
-    const targetMock = MOCK_ITEMS.find(m => m.id === itemId);
-    if (targetMock && targetMock.photos) {
-      targetMock.photos = updated as any;
-    }
-
-    ui.alertSuccess("Primary photo updated!");
-    onRefresh();
   };
 
   return (

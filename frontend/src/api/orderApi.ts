@@ -1,6 +1,5 @@
 import axiosClient from "./axiosClient";
 import { Order } from "../types/order.types";
-import { MOCK_ORDERS } from "./mockData";
 
 export interface GetOrdersParams {
   page?: number;
@@ -23,38 +22,12 @@ export interface GetOrdersResponse {
 }
 
 export const orderApi = {
-  getOrders: async (params: GetOrdersParams): Promise<GetOrdersResponse> => {
-    try {
-      const res = await axiosClient.get<GetOrdersResponse>("/orders", { params });
-      return res as unknown as GetOrdersResponse;
-    } catch (e) {
-      console.warn("Backend offline, returning mock orders:", e);
-      return {
-        data: MOCK_ORDERS as any,
-        pagination: {
-          total: MOCK_ORDERS.length,
-          page: 1,
-          limit: 10,
-          totalPages: 1,
-        },
-      };
-    }
-  },
+  getOrders: (params: GetOrdersParams): Promise<GetOrdersResponse> =>
+    axiosClient.get("/orders", { params }) as unknown as Promise<GetOrdersResponse>,
 
-  updateStatus: async (id: string, status: string): Promise<Order> => {
-    try {
-      return (await axiosClient.patch<Order>(`/orders/${id}/status`, { status })) as unknown as Order;
-    } catch (e) {
-      return { id, status } as any;
-    }
-  },
+  updateStatus: (id: string, status: string): Promise<Order> =>
+    axiosClient.patch(`/orders/${id}/status`, { status }) as unknown as Promise<Order>,
 
-  updateEstimate: async (id: string, estimatedMinutes: number, note?: string): Promise<any> => {
-    try {
-      return await axiosClient.patch(`/orders/${id}/estimate`, { estimatedMinutes, note });
-    } catch (e) {
-      return { id, estimatedMinutes } as any;
-    }
-  },
+  updateEstimate: (id: string, estimatedMinutes: number, note?: string): Promise<any> =>
+    axiosClient.patch(`/orders/${id}/estimate`, { estimatedMinutes, note }),
 };
-

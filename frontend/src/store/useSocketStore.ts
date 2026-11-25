@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 import toast from 'react-hot-toast';
+import { BACKEND_ORIGIN } from '../api/axiosClient';
 
 // Notification types
 export interface OrderNotification {
@@ -21,8 +22,11 @@ interface SocketState {
   notifications: OrderNotification[];
   connect: () => void;
   disconnect: () => void;
+  /** Join a role room and/or a table-session room. Remembered and re-joined after reconnects. */
   joinRoom: (data: { role: string; tableSessionId?: string }) => void;
   leaveRoom: (room: string) => void;
+  /** Stop receiving (and stop re-joining) a table session's events, e.g. after checkout */
+  forgetSession: (tableSessionId: string) => void;
   clearNotifications: () => void;
   // Event listener registration
   onNewOrder: (callback: (data: OrderNotification) => void) => () => void;
@@ -32,7 +36,18 @@ interface SocketState {
   onOrderStatusChange: (callback: (data: OrderNotification) => void) => () => void;
 }
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:4000';
+const SOCKET_URL = BACKEND_ORIGIN;
+
+const STAFF_ROLES = ['WAITER', 'KITCHEN', 'ADMIN', 'SUPER_ADMIN'];
+type JoinRequest = { role: string; tableSessionId?: string };
+/** Rooms this tab wants to be in; re-sent on every (re)connect */
+const desiredJoins = new Map<string, JoinRequest>();
+const joinKey = (d: JoinRequest) => `${d.role}|${d.tableSessionId || ''}`;
+
+const emitJoin = (socket: Socket, data: JoinRequest) => {
+  const token = STAFF_ROLES.includes(data.role) ? localStorage.getItem('accessToken') : undefined;
+  socket.emit('join_room', { ...data, token });
+};
 
 export const useSocketStore = create<SocketState>((set, get) => ({
   socket: null,
@@ -43,12 +58,20 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     if (get().socket?.connected) return;
 
     const socket = io(SOCKET_URL, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
     });
 
     socket.on('connect', () => {
       set({ isConnected: true });
-      console.log('✅ Socket connected:', socket.id);
+      // Re-join every room after a (re)connect so no notification is silently missed
+      desiredJoins.forEach((data) => emitJoin(socket, data));
+    });
+
+    let lastRoomError = 0;
+    socket.on('room_error', (data: { message?: string }) => {
+      if (Date.now() - lastRoomError < 10000) return;
+      lastRoomError = Date.now();
+      toast.error(data?.message || 'Live updates are unavailable. Please sign in again.');
     });
 
     socket.on('disconnect', () => {
@@ -73,7 +96,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on('order_ready', (data: OrderNotification) => {
       console.log('📢 Order ready:', data);
-      toast.success('🍽️ Your order is ready!', { duration: 5000 });
       set(state => ({
         notifications: [data, ...state.notifications.slice(0, 49)]
       }));
@@ -102,11 +124,17 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   },
 
   joinRoom: (data) => {
+    desiredJoins.set(joinKey(data), data);
     const socket = get().socket;
-    if (socket?.connected) {
-      socket.emit('join_room', data);
-      console.log(`🚪 Joined room with:`, data);
-    }
+    if (socket?.connected) emitJoin(socket, data);
+  },
+
+  forgetSession: (tableSessionId) => {
+    desiredJoins.forEach((value, key) => {
+      if (value.tableSessionId === tableSessionId) desiredJoins.delete(key);
+    });
+    const socket = get().socket;
+    if (socket?.connected) socket.emit('leave_room', `session_${tableSessionId}`);
   },
 
   leaveRoom: (room) => {

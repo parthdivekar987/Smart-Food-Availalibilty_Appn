@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useSocketStore } from './store/useSocketStore';
+import GuestRealtimeBridge from './components/realtime/GuestRealtimeBridge';
 
 // Primary Customer & Guest Layouts/Pages (Immediate load)
 import GuestLayout from './layouts/GuestLayout';
@@ -27,6 +28,7 @@ const AdminMenuPage = lazy(() => import('./pages/admin/AdminMenuPage'));
 const AdminTablePage = lazy(() => import('./pages/admin/AdminTablePage'));
 const CategoryPage = lazy(() => import('./pages/admin/AdminCategoryPage'));
 const AdminOrdersPage = lazy(() => import('./pages/admin/AdminOrdersPage'));
+const AdminLiveTablesPage = lazy(() => import('./pages/admin/AdminLiveTablesPage'));
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage'));
 const AdminEmployeesPage = lazy(() => import('./pages/admin/AdminEmployeesPage'));
 
@@ -51,6 +53,7 @@ function App() {
   return (
     <>
       <Toaster position="top-right" reverseOrder={false} />
+      <GuestRealtimeBridge />
       <Suspense fallback={<PageLoadingFallback />}>
         <Routes>
 
@@ -88,6 +91,7 @@ function App() {
             <Route path="menu" element={<AdminMenuPage />} />
             <Route path="tables" element={<AdminTablePage />} />
             <Route path="orders" element={<AdminOrdersPage />} />
+            <Route path="live" element={<AdminLiveTablesPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="employees" element={<AdminEmployeesPage />} />
           </Route>

@@ -19,7 +19,7 @@ class RedisService {
       this.client = createClient({ 
         url: redisUrl,
         socket: {
-          reconnectStrategy: (retries) => {
+          reconnectStrategy: (retries: number) => {
             if (retries > 3) return new Error("Redis connection stopped retrying");
             return Math.min(retries * 1000, 3000);
           }
@@ -31,7 +31,7 @@ class RedisService {
         console.log("⚡ Redis: Connected successfully to", redisUrl);
       });
 
-      this.client.on("error", (err) => {
+      this.client.on("error", (err: Error) => {
         this.isConnected = false;
         if (!this.hasLoggedWarning) {
           this.hasLoggedWarning = true;
@@ -39,7 +39,7 @@ class RedisService {
         }
       });
 
-      await this.client.connect().catch((err) => {
+      await this.client.connect().catch((err: Error) => {
         this.isConnected = false;
         if (!this.hasLoggedWarning) {
           this.hasLoggedWarning = true;

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { APP_EVENTS, onAppEvent } from '../../utils/appEvents';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useSocketStore } from '../../store/useSocketStore';
 import { guestApi } from '../../api/guestApi';
+import { getApiErrorMessage } from '../../api/axiosClient';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,6 +16,7 @@ import {
 } from 'lucide-react';
 import AndroidBottomNav from '../../components/mobile/AndroidBottomNav';
 import { getPhotoUrl } from '../../utils/photoUrl';
+import { computeBill, formatCurrency } from '../../utils/formatCurrency';
 
 interface OrderItem {
   id: string;
@@ -203,7 +206,12 @@ const OrderTrackingPage = () => {
   useEffect(() => {
     fetchOrder();
     const interval = setInterval(fetchOrder, 20000);
-    return () => clearInterval(interval);
+    // Refresh immediately when staff add items (pushed by the global realtime bridge)
+    const off = onAppEvent(APP_EVENTS.ORDER_UPDATED, () => fetchOrder());
+    return () => {
+      clearInterval(interval);
+      off();
+    };
   }, [sessionId, activeOrderId]);
 
   const handleRequestBill = async () => {
@@ -217,10 +225,9 @@ const OrderTrackingPage = () => {
       toast.success('🧾 Bill requested! Waiter notified to present your bill.', { icon: '🔔' });
       fetchOrder();
     } catch (err) {
-      console.warn("requestBill fallback:", err);
-      setBillRequested(true);
-      setOrder(prev => prev ? { ...prev, billRequested: true } : prev);
-      toast.success('🧾 Bill requested! Waiter notified.', { icon: '🔔' });
+      setBillRequested(false);
+      setOrder(prev => prev ? { ...prev, billRequested: false } : prev);
+      toast.error(getApiErrorMessage(err, 'Could not notify your server. Please try again.'));
     } finally {
       setRequestingBill(false);
     }
@@ -482,7 +489,7 @@ const OrderTrackingPage = () => {
                     {isCancelled && <span className="text-[10px] text-red-500 font-bold">Cancelled</span>}
                   </div>
                   <span className={`font-bold text-sm flex-shrink-0 ${isCancelled ? 'text-gray-400' : 'text-gray-900'}`}>
-                    {(item.price * item.quantity).toLocaleString('vi-VN')}đ
+                    {formatCurrency((item.price * item.quantity))}
                   </span>
                 </div>
               );
@@ -490,25 +497,23 @@ const OrderTrackingPage = () => {
           </div>
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
             <span className="font-bold text-gray-600 text-sm">Total Amount</span>
-            <span className="text-xl font-black text-gray-900">{order.totalAmount.toLocaleString('vi-VN')}đ</span>
+            <span className="text-xl font-black text-gray-900">{formatCurrency(order.totalAmount)}</span>
           </div>
         </div>
       </div>
 
-      {/* Live Tax Invoice & Charges Card (Cart History, Bill & Razorpay Ready) */}
+      {/* Live Tax Invoice & Charges */}
       <div className="px-4 mb-4">
         <BillInvoiceCard
           orderId={order.id}
-          tableName={order.tableSession?.table?.name || tableName || 'Table 04'}
+          tableName={order.tableSession?.table?.name || tableName || 'your table'}
           items={order.items}
           subtotal={order.totalAmount}
           billRequested={!!order.billRequested}
           onRequestBill={handleRequestBill}
           isRequestingBill={requestingBill}
-          onPaymentSuccess={() => {
-            setOrder(prev => prev ? { ...prev, status: 'COMPLETED' } : prev);
-            updateActiveOrderStatus('COMPLETED');
-          }}
+          isPaid={order.status === 'COMPLETED'}
+          onPayOnline={() => setShowStripeModal(true)}
         />
       </div>
 
@@ -523,7 +528,7 @@ const OrderTrackingPage = () => {
       </div>
 
       {/* Bottom Fixed Action Ribbon */}
-      <div className="fixed bottom-16 left-0 right-0 max-w-md mx-auto px-4 z-30">
+      <div className="fixed bottom-4 left-0 right-0 max-w-md mx-auto px-4 z-30">
         <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-2xl p-3.5 flex gap-2.5">
           <Link
             to="/menu"
@@ -540,27 +545,16 @@ const OrderTrackingPage = () => {
           ) : order.billRequested ? (
             <div className="flex-[2] flex gap-2">
               <button
-                onClick={() => {
-                  toast.success(`Opening Razorpay Checkout for Table ${order.tableSession?.table?.name || tableName || '04'}…`, { icon: '💳' });
-                  // Simulate or trigger payment
-                  setTimeout(() => {
-                    setOrder(prev => prev ? { ...prev, status: 'COMPLETED' } : prev);
-                    updateActiveOrderStatus('COMPLETED');
-                    toast.success('Razorpay Payment Succeeded! Thank you.', { duration: 5000 });
-                  }, 1500);
-                }}
-                className="flex-[2] py-3 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 hover:brightness-105 text-white font-black rounded-xl flex items-center justify-center gap-1.5 text-xs shadow-lg shadow-blue-500/25 active:scale-95 transition-all"
+                onClick={() => setShowStripeModal(true)}
+                className="flex-[2] py-3 bg-gradient-to-r from-indigo-600 to-violet-700 hover:brightness-110 text-white font-black rounded-xl flex items-center justify-center gap-1.5 text-xs shadow-lg shadow-indigo-500/25 active:scale-95 transition-all"
               >
                 <CreditCard size={14} />
-                <span>Pay Razorpay</span>
+                <span>Pay by card</span>
               </button>
-              <button
-                onClick={() => toast.success("Server notified for Cash Collection", { icon: '💵' })}
-                className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-black rounded-xl flex items-center justify-center gap-1 text-xs shadow-lg shadow-green-500/20 active:scale-95 transition-all"
-              >
+              <div className="flex-1 py-3 bg-emerald-50 text-emerald-800 font-black rounded-xl flex items-center justify-center gap-1 text-[11px] border border-emerald-200">
                 <Banknote size={14} />
-                <span>Cash</span>
-              </button>
+                <span>Server coming</span>
+              </div>
             </div>
           ) : (
             <motion.button
@@ -599,7 +593,7 @@ const OrderTrackingPage = () => {
       {showStripeModal && order && (
         <StripePaymentModal
           orderId={order.id}
-          amount={order.totalAmount}
+          amount={computeBill(order.totalAmount).total}
           onClose={() => setShowStripeModal(false)}
           onSuccess={() => { setShowStripeModal(false); fetchOrder(); }}
         />

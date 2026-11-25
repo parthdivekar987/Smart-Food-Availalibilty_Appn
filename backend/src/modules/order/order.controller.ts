@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import * as orderService from "./order.service";
+import * as notificationService from "../notification/notification.service";
 import { OrderStatus } from "@prisma/client";
 import jwt from "jsonwebtoken";
 
@@ -20,7 +21,7 @@ export const getOrders = async (req: Request, res: Response) => {
 
         res.json(result);
     } catch (error) {
-        res.status(500).json({ error: "Lỗi lấy danh sách đơn hàng" });
+        res.status(500).json({ message: "Failed to fetch orders" });
     }
 };
 
@@ -54,7 +55,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 
         res.json(updatedOrder);
     } catch (error) {
-        res.status(500).json({ error: "Không thể cập nhật trạng thái đơn hàng" });
+        res.status(500).json({ message: "Failed to update order status" });
     }
 };
 
@@ -101,19 +102,16 @@ export const createOrder = async (req: Request, res: Response) => {
 
         const order = await orderService.createOrder({ tableSessionId, items, userId });
 
-        // Emit event for Kitchen and Waiter (realtime)
-        const { io } = require("../../app");
-        if (io) {
-            io.emit("new_order", order);
-        }
+        // Realtime: staff screens only (never broadcast orders to other guests)
+        notificationService.notifyStaffNewOrderPayload(order);
 
         res.status(201).json(order);
     } catch (error: any) {
         console.error(error);
-        if (error.message === "Phiên làm việc không hợp lệ hoặc đã đóng") {
-            return res.status(400).json({ error: error.message });
+        if (error.status) {
+            return res.status(error.status).json({ message: error.message });
         }
-        res.status(500).json({ error: "Không thể gửi đơn hàng" });
+        res.status(500).json({ message: "Failed to place order. Please try again." });
     }
 };
 
@@ -126,12 +124,12 @@ export const getOrderBySession = async (req: Request, res: Response) => {
 
         const order = await orderService.getOrderByTableSession(sessionId);
         if (!order) {
-            return res.status(404).json({ error: "Không tìm thấy đơn hàng" });
+            return res.status(404).json({ message: "Order not found" });
         }
 
         res.json(order);
     } catch (error) {
-        res.status(500).json({ error: "Lỗi lấy thông tin đơn hàng" });
+        res.status(500).json({ message: "Failed to fetch order" });
     }
 };
 
@@ -149,5 +147,41 @@ export const completeOrder = async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error(error);
         res.status(500).json({ error: error.message || "Failed to complete order" });
+    }
+};
+
+/**
+ * Staff (waiter/admin) adds items to a seated table's order on the guest's behalf.
+ * Prices are always taken from the menu; the guest's devices are notified in real time.
+ * POST /orders/session/:sessionId/items  { items: [{ id, quantity, selectedModifiers? , note? }] }
+ */
+export const addItemsByStaff = async (req: Request, res: Response) => {
+    try {
+        const { sessionId } = req.params;
+        const { items } = req.body || {};
+        const staff = req.user as any;
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ message: "Select at least one item to add" });
+        }
+        if (items.length > 30) {
+            return res.status(400).json({ message: "Too many different items in one request" });
+        }
+        const order = await orderService.createOrder({
+            tableSessionId: sessionId,
+            items: items.map((i: any) => ({
+                id: String(i.id || ""),
+                quantity: Number(i.quantity),
+                price: 0, // replaced by the server-side menu price
+                note: typeof i.note === "string" ? i.note.slice(0, 200) : undefined,
+                selectedModifiers: i.selectedModifiers,
+            })),
+            addedBy: { id: staff.id, name: staff.fullName || "Staff", role: staff.role },
+        });
+        notificationService.notifyStaffNewOrderPayload(order);
+        res.status(201).json(order);
+    } catch (error: any) {
+        if (error.status) return res.status(error.status).json({ message: error.message });
+        console.error("[orders] staff add items failed:", error);
+        res.status(500).json({ message: "Failed to add items. Please try again." });
     }
 };

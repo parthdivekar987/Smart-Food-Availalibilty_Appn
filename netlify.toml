@@ -1,0 +1,15 @@
+# Netlify deploys only the React frontend (the Express/Socket.IO backend is hosted separately, e.g. Render).
+[build]
+  base = "frontend"
+  command = "npm ci && npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Vite 7 needs Node 20.19+
+  NODE_VERSION = "22"
+
+# Single-page app: let React Router handle every path (fixes 404 on refresh / deep links)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

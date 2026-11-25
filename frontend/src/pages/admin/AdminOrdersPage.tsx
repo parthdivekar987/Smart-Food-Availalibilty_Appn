@@ -4,6 +4,7 @@ import { Order } from '../../types/order.types';
 import { Search, Filter, Calendar } from 'lucide-react';
 import { ui } from '../../utils/swalHelper';
 import { useSocketStore } from '../../store/useSocketStore';
+import { formatCurrency, LOCALE } from '../../utils/formatCurrency';
 
 const ORDER_STATUSES = [
     { value: 'RECEIVED', label: 'Received', color: 'bg-blue-100 text-blue-700' },
@@ -181,7 +182,7 @@ const AdminOrdersPage = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-600">
-                                            {new Date(order.createdAt).toLocaleString('vi-VN')}
+                                            {new Date(order.createdAt).toLocaleString(LOCALE)}
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="text-sm font-medium text-gray-900 max-w-[250px] truncate">
@@ -192,7 +193,7 @@ const AdminOrdersPage = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 font-bold text-gray-900">
-                                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.totalAmount)}
+                                            {formatCurrency(order.totalAmount)}
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${getStatusColor(order.status)}`}>

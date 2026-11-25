@@ -31,6 +31,7 @@ import { reportApi, DashboardStats, RevenueData, TopSellingItem, UserStats } fro
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSocketStore } from '../../store/useSocketStore';
 import toast from 'react-hot-toast';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 const ALLOWED_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 
@@ -192,8 +193,6 @@ const AdminDashboardPage = () => {
         
         setDateRange({ start: toLocalISOString(start), end: endStr });
     };
-
-    const formatCurrency = (val: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
 
     // Kiểm tra quyền truy cập cho UI (Case-insensitive check)
     const currentRoleUpper = user?.role ? String(user.role).toUpperCase() : '';

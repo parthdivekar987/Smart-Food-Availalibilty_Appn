@@ -1,124 +1,58 @@
 import axiosClient from './axiosClient';
-import { MOCK_CATEGORIES, MOCK_ITEMS } from './mockData';
+
+export interface PublicTable {
+  id: string;
+  name: string;
+  capacity: number;
+  isActive: boolean;
+  isOccupied: boolean;
+  restaurantId: string;
+}
+
+export interface WalkInResponse {
+  session: { id: string; tableId: string; status: string };
+  table: { id: string; name: string; capacity: number };
+  isNew: boolean;
+}
 
 export const guestApi = {
-  startSession: async (tableId: string, token: string) => {
-    try {
-      return await axiosClient.post('/guest/session', { tableId, token });
-    } catch (err) {
-      console.warn("Backend unavailable, using demo guest session:", err);
-      return {
-        session: { id: 'demo-session-' + Date.now(), tableId, status: 'OPEN' }
-      };
-    }
-  },
-  placeOrder: async (data: any) => {
-    try {
-      return await axiosClient.post('/orders', data);
-    } catch (err) {
-      console.warn("Backend unavailable, using demo order simulation:", err);
-      return {
-        success: true,
-        order: {
-          id: 'demo-order-' + Math.floor(Math.random() * 10000),
-          status: 'RECEIVED',
-          totalAmount: data.totalAmount || 150000,
-          items: data.items || [],
-          createdAt: new Date().toISOString()
-        }
-      };
-    }
-  },
+  /** Start (or resume) a session from a scanned table QR code */
+  startSession: (tableId: string, token: string) =>
+    axiosClient.post('/guest/session', { tableId, token }),
 
-  getCategories: async () => {
-    try {
-      const res = await axiosClient.get('/guest/categories');
-      if (res && (res as any).data && (res as any).data.length > 0) {
-        return res;
-      }
-      return { data: MOCK_CATEGORIES };
-    } catch (err) {
-      return { data: MOCK_CATEGORIES };
-    }
-  },
+  /** Seat a walk-in guest without a QR code (first free table if tableId is omitted) */
+  startWalkIn: (tableId?: string) =>
+    axiosClient.post('/guest/walk-in', { tableId }) as unknown as Promise<WalkInResponse>,
 
-  getMenuItems: async (params: {
+  /** Is this table session still open? (detects checkout that happened while offline) */
+  getSessionStatus: (sessionId: string) =>
+    axiosClient.get(`/sessions/${sessionId}/status`) as unknown as Promise<{ id: string; status: "OPEN" | "CLOSED"; tableName: string; endedAt: string | null }>,
+
+  getTables: () =>
+    axiosClient.get('/guest/tables') as unknown as Promise<{ data: PublicTable[] }>,
+
+  placeOrder: (data: any) => axiosClient.post('/orders', data),
+
+  getCategories: () => axiosClient.get('/guest/categories'),
+
+  getMenuItems: (params: {
     page: number;
     limit: number;
     search?: string;
     categoryId?: string;
     isChefRecommended?: boolean;
     sortBy?: string;
-  }) => {
-    try {
-      const res = await axiosClient.get('/guest/menu-items', { params });
-      if (res && (res as any).data && (res as any).data.length > 0) {
-        return res;
-      }
-      // Filter mock items
-      let filtered = [...MOCK_ITEMS];
-      if (params.categoryId && params.categoryId !== 'all') {
-        filtered = filtered.filter(i => i.categoryId === params.categoryId);
-      }
-      if (params.isChefRecommended) {
-        filtered = filtered.filter(i => i.isChefRecommended);
-      }
-      if (params.search) {
-        const q = params.search.toLowerCase();
-        filtered = filtered.filter(i => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
-      }
-      return {
-        data: filtered,
-        pagination: { totalPages: 1, page: 1, limit: params.limit, total: filtered.length }
-      };
-    } catch (err) {
-      let filtered = [...MOCK_ITEMS];
-      if (params.categoryId && params.categoryId !== 'all') {
-        filtered = filtered.filter(i => i.categoryId === params.categoryId);
-      }
-      if (params.isChefRecommended) {
-        filtered = filtered.filter(i => i.isChefRecommended);
-      }
-      if (params.search) {
-        const q = params.search.toLowerCase();
-        filtered = filtered.filter(i => i.name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
-      }
-      return {
-        data: filtered,
-        pagination: { totalPages: 1, page: 1, limit: params.limit, total: filtered.length }
-      };
-    }
-  },
+  }) => axiosClient.get('/guest/menu-items', { params }),
 
-  getOrderDetails: async (tableSessionId: string) => {
-    try {
-      return await axiosClient.get(`/guest/orders/${tableSessionId}`);
-    } catch (err) {
-      console.warn("Backend getOrderDetails fallback:", err);
-      return null;
-    }
-  },
-  requestBill: async (orderId: string) => {
-    try {
-      const res: any = await axiosClient.post(`/guest/orders/${orderId}/request-bill`);
-      return res;
-    } catch (err: any) {
-      console.warn("Backend requestBill fallback or offline simulation:", err);
-      // Return successful simulation structure so UI updates smoothly
-      return {
-        message: "Bill requested successfully",
-        order: {
-          id: orderId,
-          billRequested: true,
-          updatedAt: new Date().toISOString()
-        }
-      };
-    }
-  },
+  getOrderDetails: (tableSessionId: string) =>
+    axiosClient.get(`/guest/orders/${tableSessionId}`),
+
+  requestBill: (orderId: string) =>
+    axiosClient.post(`/guest/orders/${orderId}/request-bill`),
 
   getReviews: (menuItemId: string, params: { page: number; limit: number }) =>
-    axiosClient.get(`/guest/menu-items/${menuItemId}/reviews`, { params }).catch(() => ({ data: [], hasMore: false })),
+    axiosClient.get(`/guest/menu-items/${menuItemId}/reviews`, { params }),
+
   createReview: (menuItemId: string, data: { rating: number; comment: string; customerName?: string; tableSessionId: string }) =>
     axiosClient.post(`/guest/menu-items/${menuItemId}/reviews`, data),
 };
-

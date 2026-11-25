@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { guestApi } from '../api/guestApi';
+import { guestApi, PublicTable } from '../api/guestApi';
+import { getApiErrorMessage } from '../api/axiosClient';
+import toast from 'react-hot-toast';
 import { useSessionStore } from '../store/useSessionStore';
 import { useAuthStore } from '../store/useAuthStore';
 import {
@@ -9,7 +11,7 @@ import {
   Smartphone, ChefHat, Eye, Camera, Share2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import LuxuryDining3DExperience from '../components/3d/LuxuryDining3DExperience';
+import PhotoHeroShowcase from '../components/hero/PhotoHeroShowcase';
 import Restaurant3DFloorPlan from '../components/3d/Restaurant3DFloorPlan';
 import AndroidBottomNav from '../components/mobile/AndroidBottomNav';
 
@@ -26,6 +28,8 @@ const EntryPoint: React.FC = () => {
   // Modals state
   const [showScanner, setShowScanner] = useState(false);
   const [showFloorModal, setShowFloorModal] = useState(false);
+  const [floorTables, setFloorTables] = useState<PublicTable[]>([]);
+  const [seating, setSeating] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scrolledPastHero, setScrolledPastHero] = useState(false);
 
@@ -127,18 +131,19 @@ const EntryPoint: React.FC = () => {
 
   useEffect(() => {
     if (tableId) {
+      if (!token) {
+        setError('This QR code is incomplete. Please scan the QR code on your table again.');
+        return;
+      }
       setIsLoading(true);
-      guestApi.startSession(tableId, token || 'valid-token')
+      guestApi.startSession(tableId, token)
         .then((res: any) => {
           const sessionId = res.session?.id || res.id;
           setSession(tableId, sessionId);
           navigate('/menu');
         })
         .catch((err) => {
-          console.warn("Backend session validation bypassed for demo:", err);
-          const demoSessionId = `session-${tableId}-${Date.now()}`;
-          setSession(tableId, demoSessionId);
-          navigate('/menu');
+          setError(getApiErrorMessage(err, 'Invalid or expired QR code. Please scan the latest QR code on your table.'));
         })
         .finally(() => setIsLoading(false));
     }
@@ -150,10 +155,25 @@ const EntryPoint: React.FC = () => {
     navigate('/');
   };
 
-  const handleStartDemo = (tableNum = '04') => {
+  // Walk-in seating: the backend opens a real session on a free table (or the chosen one)
+  const seatGuest = async (chosenTableId?: string) => {
+    if (seating) return;
+    setSeating(true);
+    try {
+      const res = await guestApi.startWalkIn(chosenTableId);
+      setSession(res.session.tableId, res.session.id, res.table.name);
+      toast.success(`You're seated at ${res.table.name}`);
+      navigate('/menu');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not seat you right now. Please ask our staff.'));
+    } finally {
+      setSeating(false);
+    }
+  };
+
+  const handleStartDemo = (_tableNum?: string) => {
     triggerHaptic(25);
-    setSession(`table-demo-${tableNum}`, `session-demo-${tableNum}-${Date.now()}`);
-    navigate('/menu');
+    seatGuest();
   };
 
   const handleOpenScanner = () => {
@@ -164,6 +184,9 @@ const EntryPoint: React.FC = () => {
   const handleOpenFloor = () => {
     triggerHaptic(20);
     setShowFloorModal(true);
+    guestApi.getTables()
+      .then((res) => setFloorTables(res.data || []))
+      .catch((err) => toast.error(getApiErrorMessage(err, 'Could not load tables')));
   };
 
   // If tableId is in URL, render loading state
@@ -328,8 +351,8 @@ const EntryPoint: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-transparent border border-amber-500/30 text-amber-300 text-[10px] sm:text-xs font-black tracking-wide uppercase shadow-lg shadow-amber-500/5"
             >
-              <Sparkles size={12} className="text-amber-400 animate-spin" style={{ animationDuration: '7s' }} />
-              <span>3D Contactless Dining Ecosystem</span>
+              <Sparkles size={12} className="text-amber-400" />
+              <span>Contactless dine-in ordering</span>
             </motion.div>
 
             {/* Main Headline */}
@@ -339,9 +362,9 @@ const EntryPoint: React.FC = () => {
               transition={{ delay: 0.1 }}
               className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.15]"
             >
-              Dine with <br className="hidden sm:inline" />
+              Great food, <br className="hidden sm:inline" />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-orange-400 to-amber-500 drop-shadow-sm">
-                3D Gastronomy
+                served at your table
               </span>
             </motion.h1>
 
@@ -352,12 +375,12 @@ const EntryPoint: React.FC = () => {
               transition={{ delay: 0.2 }}
               className="text-gray-400 text-xs sm:text-sm lg:text-base leading-relaxed max-w-xl"
             >
-              Scan your table QR code, inspect artisanal dishes in 360° Three.js 3D, and track live kitchen cooking straight from your smartphone.
+              Scan the QR code on your table to browse the menu, order in seconds, follow your food from kitchen to table, and pay when you are ready.
             </motion.p>
 
             {/* MOBILE ONLY: 3D CENTERPIECE RIGHT HERE IN THE THUMB VIEWPORT */}
             <div className="w-full lg:hidden my-1">
-              <LuxuryDining3DExperience
+              <PhotoHeroShowcase
                 onExploreHall={handleOpenFloor}
                 onInstantDemo={() => handleStartDemo('04')}
               />
@@ -392,7 +415,7 @@ const EntryPoint: React.FC = () => {
               </button>
             </motion.div>
 
-            {/* Instant Demo Dine-In (Table 04) Bar */}
+            {/* Walk-in seating bar */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -409,7 +432,7 @@ const EntryPoint: React.FC = () => {
                   className="w-full sm:w-auto px-4 py-2 rounded-xl text-[11px] sm:text-xs font-black text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-all flex items-center justify-center gap-2 active:scale-95 min-h-[42px] touch-manipulation"
                 >
                   <PlayCircle size={14} className="text-amber-400" />
-                  <span>Instant Demo (Table 04)</span>
+                  <span>Get Seated Now</span>
                 </button>
               </div>
             </motion.div>
@@ -437,9 +460,9 @@ const EntryPoint: React.FC = () => {
 
           </div>
 
-          {/* DESKTOP ONLY: Three.js Interactive Masterpiece (Right Column) */}
+          {/* DESKTOP ONLY: photo showcase (right column) */}
           <div className="hidden lg:flex lg:col-span-6 flex-col items-center justify-center relative">
-            <LuxuryDining3DExperience
+            <PhotoHeroShowcase
               onExploreHall={handleOpenFloor}
               onInstantDemo={() => handleStartDemo('04')}
             />
@@ -649,7 +672,7 @@ const EntryPoint: React.FC = () => {
             initial={{ opacity: 0, y: 20, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="fixed bottom-20 right-4 z-40 sm:hidden"
+            className="fixed bottom-6 right-4 z-40 sm:hidden"
           >
             <button
               onClick={handleOpenScanner}
@@ -665,7 +688,7 @@ const EntryPoint: React.FC = () => {
       {/* ======================================================== */}
       {/* 6. LUXURY DARK FOOTER                                    */}
       {/* ======================================================== */}
-      <footer className="relative z-10 bg-[#06080c] border-t border-white/10 py-8 pb-24 sm:pb-8 mt-auto">
+      <footer className="relative z-10 bg-[#06080c] border-t border-white/10 py-8 pb-8 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center text-white">
@@ -709,7 +732,7 @@ const EntryPoint: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-white font-black text-sm sm:text-base leading-none">Interactive 3D Dining Hall</h3>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Click any table to simulate sitting down & start ordering</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">Pick a free table to be seated and start ordering</p>
                   </div>
                 </div>
                 <button
@@ -720,15 +743,22 @@ const EntryPoint: React.FC = () => {
                 </button>
               </div>
               <div className="p-2 sm:p-4 overflow-y-auto">
-                <Restaurant3DFloorPlan
-                  tables={[]}
-                  onSelectTable={(table) => {
-                    triggerHaptic(25);
-                    setSession(table.id, 'session-' + table.id);
-                    setShowFloorModal(false);
-                    navigate('/menu');
-                  }}
-                />
+                {floorTables.length === 0 ? (
+                  <p className="text-center text-gray-400 text-sm py-12">Loading tables…</p>
+                ) : (
+                  <Restaurant3DFloorPlan
+                    tables={floorTables as any}
+                    onSelectTable={(table: any) => {
+                      if (table.isOccupied) {
+                        toast.error(`${table.name} is occupied. Please choose another table.`);
+                        return;
+                      }
+                      triggerHaptic(25);
+                      setShowFloorModal(false);
+                      seatGuest(table.id);
+                    }}
+                  />
+                )}
               </div>
             </motion.div>
           </div>
@@ -804,7 +834,7 @@ const EntryPoint: React.FC = () => {
                     }}
                     className="text-xs text-amber-400 hover:text-amber-300 font-semibold underline underline-offset-4 active:scale-95 py-1"
                   >
-                    Or skip and simulate sitting at Table 04
+                    Or skip and get seated at the next free table
                   </button>
                 </div>
               </div>

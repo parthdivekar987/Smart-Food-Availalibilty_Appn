@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { APP_EVENTS, onAppEvent } from '../utils/appEvents';
 import { useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -7,7 +8,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import { guestApi } from '../api/guestApi';
+import { guestApi, PublicTable } from '../api/guestApi';
+import { useSessionStore } from '../store/useSessionStore';
 import { Category, MenuItem } from '../types';
 import ItemModal from '../components/ItemModal';
 import CartModal from '../components/CartModal';
@@ -18,6 +20,7 @@ import { Header } from '../components/common/Header';
 import AndroidBottomNav from '../components/mobile/AndroidBottomNav';
 import Restaurant3DFloorPlan from '../components/3d/Restaurant3DFloorPlan';
 import CokeHeroCard from '../components/3d/CokeHeroCard';
+import { formatCurrency } from '../utils/formatCurrency';
 
 // Category emoji map (Master Prompt Strict Categories)
 const CATEGORY_EMOJIS: Record<string, string> = {
@@ -73,6 +76,9 @@ export default function MenuPage() {
   const [searchText, setSearchText] = useState(searchParams.get('q') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('cat') || 'all');
   const [isChefFilter, setIsChefFilter] = useState(searchParams.get('chef') === 'true');
+  // Keep the chef filter in sync when navigated to from shortcuts (e.g. /menu?chef=true)
+  const chefParam = searchParams.get('chef') === 'true';
+  useEffect(() => setIsChefFilter(chefParam), [chefParam]);
   const [sortBy, setSortBy] = useState<'default' | 'popular'>((searchParams.get('sort') as 'default' | 'popular') || 'default');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
@@ -86,7 +92,28 @@ export default function MenuPage() {
 
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // Open the cart from global notifications ("View cart") or a /menu?cart=open link
+  useEffect(() => onAppEvent(APP_EVENTS.OPEN_CART, () => setIsCartOpen(true)), []);
+  useEffect(() => {
+    if (searchParams.get("cart") === "open") {
+      setIsCartOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("cart");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
   const [showFloorPlan, setShowFloorPlan] = useState(false);
+  const [floorTables, setFloorTables] = useState<PublicTable[]>([]);
+  const myTableId = useSessionStore((state) => state.tableId);
+
+  // Live tables for the 3D dining hall
+  useEffect(() => {
+    if (!showFloorPlan) return;
+    guestApi.getTables()
+      .then((res) => setFloorTables(res.data || []))
+      .catch(() => toast.error('Could not load the dining hall'));
+  }, [showFloorPlan]);
   const totalCartItems = useCartStore(state => state.items.reduce((acc, i) => acc + i.quantity, 0));
 
   useEffect(() => {
@@ -376,7 +403,7 @@ export default function MenuPage() {
                     </h3>
                     <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-50">
                       <span className={`font-extrabold text-sm ${isUnavailable ? 'text-gray-400' : 'text-orange-600'}`}>
-                        {item.price.toLocaleString()}đ
+                        {formatCurrency(item.price)}
                       </span>
                       <div className="flex items-center gap-1.5">
                         <button
@@ -485,7 +512,7 @@ export default function MenuPage() {
 
                   <div className="flex justify-between items-center mt-1.5 pt-1 border-t border-gray-50">
                     <span className={`font-extrabold text-base ${isUnavailable ? 'text-gray-400' : 'text-orange-600'}`}>
-                      {item.price.toLocaleString()}đ
+                      {formatCurrency(item.price)}
                     </span>
                     <div className="flex items-center gap-2">
                       <button
@@ -527,7 +554,7 @@ export default function MenuPage() {
       {/* Floating Cart Button */}
       <AnimatePresence>
         {totalCartItems > 0 && (
-          <div className="fixed bottom-20 left-4 right-4 z-30 max-w-md mx-auto">
+          <div className="fixed bottom-6 left-4 right-4 z-30 max-w-md mx-auto">
             <motion.button
               initial={{ y: 60, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -585,13 +612,18 @@ export default function MenuPage() {
                 </button>
               </div>
               <div className="p-2 sm:p-4 overflow-y-auto">
-                <Restaurant3DFloorPlan
-                  tables={[]}
-                  onSelectTable={(table) => {
-                    toast.success(`Selected ${table.name}`);
-                    setShowFloorPlan(false);
-                  }}
-                />
+                {floorTables.length === 0 ? (
+                  <p className="text-center text-gray-400 text-sm py-12">Loading dining hall…</p>
+                ) : (
+                  <Restaurant3DFloorPlan
+                    tables={floorTables as any}
+                    selectedTableId={myTableId || undefined}
+                    onSelectTable={(table) => {
+                      if (table.id === myTableId) toast.success(`This is your table: ${table.name}`);
+                      else toast(`${table.name} · ${table.capacity} seats`);
+                    }}
+                  />
+                )}
               </div>
             </motion.div>
           </div>

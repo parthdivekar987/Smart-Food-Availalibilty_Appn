@@ -1,23 +1,22 @@
 import axiosClient from './axiosClient';
 
-/*
-  Payment API for handling Payment Intents (Stripe) and other payment methods.
-*/
+export type StaffPaymentMethod = 'CASH' | 'CARD' | 'MOMO' | 'VNPAY' | 'ZALOPAY';
 
 export const paymentApi = {
-  // Create Stripe Payment Intent
-  createStripeIntent: (orderId: string) => {
-    return axiosClient.post('/payment/create-payment-intent', { orderId });
-  },
+  /** Create a Stripe PaymentIntent for an order; returns { clientSecret, paymentId } */
+  createStripeIntent: (orderId: string) =>
+    axiosClient.post('/payment/create-intent', { orderId }) as unknown as Promise<{ clientSecret: string; paymentId: string }>,
 
-  // Confirm Cash/Other Payment (if needed for manual flow)
+  /** Ask the backend to verify a succeeded PaymentIntent with Stripe and record it */
+  verifyStripePayment: (paymentIntentId: string) =>
+    axiosClient.post('/payment/stripe/verify', { paymentIntentId }),
+
+  /** Staff records a payment taken at the table (cash, card terminal, wallet). Closes the session. */
   confirmPayment: (data: {
     orderId: string;
-    paymentMethod: 'CASH' | 'STRIPE' | 'MOMO' | 'VNPAY' | 'ZALOPAY';
+    paymentMethod: StaffPaymentMethod;
     discountAmount?: number;
-    discountType?: string;
+    discountType?: 'PERCENTAGE' | 'FIXED' | null;
     finalAmount?: number;
-  }) => {
-    return axiosClient.post('/payment/confirm', data);
-  }
+  }) => axiosClient.post('/payment/confirm-cash', data),
 };

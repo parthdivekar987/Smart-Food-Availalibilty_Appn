@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { buildDiningTable, animateDiningScene } from './realisticDining';
 import { Table } from '../../types';
 import { Layers, Compass, Eye, Users, QrCode, CheckCircle2, Clock, Sparkles } from 'lucide-react';
 
@@ -8,7 +10,11 @@ interface Restaurant3DFloorPlanProps {
   onSelectTable?: (table: Table) => void;
   selectedTableId?: string;
   isInteractive?: boolean;
+  /** Initial camera. Guests default to an eye-level view; admin screens can use 'iso'. */
+  defaultView?: CameraView;
 }
+
+type CameraView = 'guest' | 'iso' | 'mezzanine' | 'bar' | 'vip' | 'top' | 'walk';
 
 // Generate realistic dark oak herringbone parquet wood canvas texture
 function createLuxuryWoodFloorTexture(): THREE.CanvasTexture {
@@ -108,29 +114,23 @@ function createEveningCityscapeTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+/** Live occupancy when provided by the API, otherwise inactive tables count as unavailable */
+const isTableOccupied = (t: Table) => (t as any).isOccupied ?? !t.isActive;
+
 export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
   tables,
   onSelectTable,
   selectedTableId,
   isInteractive = true,
+  defaultView = 'guest',
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [hoveredTable, setHoveredTable] = useState<Table | null>(null);
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
-  const [cameraView, setCameraView] = useState<'iso' | 'mezzanine' | 'bar' | 'vip' | 'top' | 'walk'>('iso');
+  const [cameraView, setCameraView] = useState<CameraView>(defaultView);
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'AVAILABLE' | 'OCCUPIED'>('ALL');
 
-  // Fallback tables if empty
-  const displayTables: Table[] = tables.length > 0 ? tables : [
-    { id: 't1', name: 'Table 01 (Window)', capacity: 2, isActive: true, restaurantId: 'r1' },
-    { id: 't2', name: 'Table 02 (Window)', capacity: 4, isActive: true, restaurantId: 'r1' },
-    { id: 't3', name: 'Table 03 (Booth)', capacity: 4, isActive: false, restaurantId: 'r1' },
-    { id: 't4', name: 'Table 04 (Booth)', capacity: 6, isActive: true, restaurantId: 'r1' },
-    { id: 't5', name: 'Table 05 (Courtyard)', capacity: 2, isActive: true, restaurantId: 'r1' },
-    { id: 't6', name: 'Table 06 (Courtyard)', capacity: 8, isActive: false, restaurantId: 'r1' },
-    { id: 't7', name: 'Table 07 (Terrace)', capacity: 4, isActive: true, restaurantId: 'r1' },
-    { id: 't8', name: 'Table 08 (VIP Suite)', capacity: 8, isActive: true, restaurantId: 'r1' },
-  ];
+  const displayTables: Table[] = tables;
 
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const tableMeshesRef = useRef<Map<string, THREE.Group>>(new Map());
@@ -160,22 +160,37 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.3;
+    renderer.toneMappingExposure = 1.05;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.replaceChildren(renderer.domElement);
 
-    // 4. Realistic Warm Architectural Lighting
-    const ambientLight = new THREE.AmbientLight(0xffedd5, 1.1);
-    scene.add(ambientLight);
+    // Image-based lighting gives porcelain, glass and brass believable reflections
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = envTexture;
+    scene.environmentIntensity = 0.35;
 
-    const dirLight = new THREE.DirectionalLight(0xfff7ed, 2.4);
-    dirLight.position.set(12, 18, 12);
+    // 4. Realistic Warm Architectural Lighting
+    const ambientLight = new THREE.AmbientLight(0xffedd5, 0.35);
+    scene.add(ambientLight);
+    scene.add(new THREE.HemisphereLight(0xfff1dc, 0x3a2414, 0.6));
+
+    const dirLight = new THREE.DirectionalLight(0xfff7ed, 1.6);
+    dirLight.position.set(10, 18, 10);
     dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.left = -18;
+    dirLight.shadow.camera.right = 18;
+    dirLight.shadow.camera.top = 16;
+    dirLight.shadow.camera.bottom = -16;
+    dirLight.shadow.camera.far = 50;
+    dirLight.shadow.bias = -0.0004;
+    dirLight.shadow.normalBias = 0.02;
     scene.add(dirLight);
 
     // Warm chandelier glow in dining room center
-    const centralChandelier = new THREE.PointLight(0xff9933, 2.8, 28);
+    const centralChandelier = new THREE.PointLight(0xff9933, 1.6, 28);
     centralChandelier.position.set(0, 7.5, 0);
     scene.add(centralChandelier);
 
@@ -189,9 +204,10 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
     const floorGeo = new THREE.PlaneGeometry(32, 26);
     const floorMat = new THREE.MeshStandardMaterial({
       map: woodTexture,
-      roughness: 0.35,
-      metalness: 0.1,
+      roughness: 0.55,
+      metalness: 0.0,
     });
+    woodTexture.colorSpace = THREE.SRGBColorSpace;
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
@@ -328,141 +344,16 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
       tableGroup.position.set(posX, 0, posZ);
       tableGroup.userData = { table };
 
-      const isOccupied = !table.isActive || index % 3 === 1;
-      const isSelected = table.id === selectedTableId;
-
-      // Tabletop (Rich Walnut Wood Finish)
-      const isLarge = table.capacity >= 6;
-      const tableGeo = isLarge
-        ? new THREE.CylinderGeometry(1.45, 1.45, 0.12, 36)
-        : new THREE.CylinderGeometry(1.15, 1.15, 0.12, 36);
-
-      const tableMat = new THREE.MeshStandardMaterial({
-        color: isSelected ? 0xff7700 : 0x3d271d,
-        roughness: 0.28,
-        metalness: 0.15,
+      const { group: furniture, hitTargets } = buildDiningTable({
+        capacity: table.capacity,
+        occupied: isTableOccupied(table),
+        selected: table.id === selectedTableId,
       });
-
-      const tableTop = new THREE.Mesh(tableGeo, tableMat);
-      tableTop.position.y = 1.15;
-      tableTop.castShadow = true;
-      tableTop.receiveShadow = true;
-      tableGroup.add(tableTop);
-
-      // Central metallic brass pillar leg
-      const legGeo = new THREE.CylinderGeometry(0.09, 0.09, 1.1, 16);
-      const legMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.2 });
-      const leg = new THREE.Mesh(legGeo, legMat);
-      leg.position.y = 0.55;
-      leg.castShadow = true;
-      tableGroup.add(leg);
-
-      // Heavy round brass base plate
-      const baseGeo = new THREE.CylinderGeometry(0.58, 0.58, 0.05, 24);
-      const base = new THREE.Mesh(baseGeo, legMat);
-      base.position.y = 0.025;
-      tableGroup.add(base);
-
-      // Ambient Status Glow Ring (Emerald = Available, Amber = Occupied)
-      const statusColor = isOccupied ? 0xf59e0b : 0x10b981;
-      const ringGeo = new THREE.RingGeometry(1.5, 1.64, 32);
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: statusColor,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.8,
-      });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = 0.02;
-      tableGroup.add(ring);
-
-      // Realistic Fine Dining Place Settings on Tabletop
-      const plateMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
-      const wineGlassMat = new THREE.MeshPhysicalMaterial({
-        color: 0xffffff,
-        transmission: 0.9,
-        transparent: true,
-        opacity: 0.85,
-        roughness: 0.05,
-      });
-
-      const chairCount = table.capacity || 4;
-      for (let c = 0; c < chairCount; c++) {
-        const angle = (c / chairCount) * Math.PI * 2;
-        const plateDist = isLarge ? 1.05 : 0.8;
-
-        // Porcelain Plate
-        const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.2, 0.03, 18), plateMat);
-        plate.position.set(Math.cos(angle) * plateDist, 1.23, Math.sin(angle) * plateDist);
-        tableGroup.add(plate);
-
-        // Wine Glass
-        const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.04, 0.22, 12), wineGlassMat);
-        glass.position.set(
-          Math.cos(angle + 0.2) * (plateDist + 0.15),
-          1.32,
-          Math.sin(angle + 0.2) * (plateDist + 0.15)
-        );
-        tableGroup.add(glass);
-      }
-
-      // Cozy Glowing Table Candle Centerpiece
-      const candle = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.07, 0.07, 0.25, 16),
-        new THREE.MeshStandardMaterial({ color: 0xfffaea, roughness: 0.5 })
-      );
-      candle.position.set(0, 1.34, 0);
-      tableGroup.add(candle);
-
-      const flame = new THREE.Mesh(
-        new THREE.SphereGeometry(0.04, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0xffaa00 })
-      );
-      flame.position.set(0, 1.48, 0);
-      flame.scale.set(0.8, 1.6, 0.8);
-      tableGroup.add(flame);
-
-      const tablePointLight = new THREE.PointLight(statusColor, 0.8, 3.5);
-      tablePointLight.position.set(0, 1.6, 0);
-      tableGroup.add(tablePointLight);
-
-      // Velvet Dining Chairs with Brass Legs
-      const seatMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.55 });
-      const chairLegMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.25 });
-
-      for (let c = 0; c < chairCount; c++) {
-        const angle = (c / chairCount) * Math.PI * 2;
-        const dist = isLarge ? 1.75 : 1.45;
-        const chairGroup = new THREE.Group();
-        chairGroup.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
-        chairGroup.rotation.y = -angle + Math.PI / 2;
-
-        // Seat cushion
-        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.09, 0.52), seatMat);
-        seat.position.y = 0.65;
-        seat.castShadow = true;
-        chairGroup.add(seat);
-
-        // Brass chair legs
-        [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]].forEach(([lx, lz]) => {
-          const cl = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.65, 8), chairLegMat);
-          cl.position.set(lx, 0.325, lz);
-          chairGroup.add(cl);
-        });
-
-        // Curved backrest
-        const back = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.46, 0.07), seatMat);
-        back.position.set(0, 0.96, -0.22);
-        back.castShadow = true;
-        chairGroup.add(back);
-
-        tableGroup.add(chairGroup);
-      }
+      tableGroup.add(furniture);
+      raycastTargets.push(...hitTargets);
 
       scene.add(tableGroup);
       tableMeshes.set(table.id, tableGroup);
-      raycastTargets.push(tableTop);
     });
 
     tableMeshesRef.current = tableMeshes;
@@ -507,7 +398,10 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
     const targetPos = new THREE.Vector3(0, 14, 18);
     const targetLook = new THREE.Vector3(0, 0.5, 0);
 
-    if (cameraView === 'top') {
+    if (cameraView === 'guest') {
+      targetPos.set(1.2, 2.3, 8.2);
+      targetLook.set(-0.5, 1.15, -2.5);
+    } else if (cameraView === 'top') {
       targetPos.set(0, 24, 0.1);
       targetLook.set(0, 0, 0);
     } else if (cameraView === 'mezzanine') {
@@ -577,7 +471,8 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
       scene.rotation.x = rotX;
 
       // Candlelight subtle flicker
-      centralChandelier.intensity = 2.8 + Math.sin(elapsed * 8) * 0.15;
+      centralChandelier.intensity = 1.6 + Math.sin(elapsed * 8) * 0.08;
+      animateDiningScene(scene, elapsed);
 
       renderer.render(scene, camera);
     };
@@ -591,12 +486,14 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
       renderer.domElement.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
+      envTexture.dispose();
+      pmrem.dispose();
       renderer.dispose();
     };
   }, [displayTables, cameraView, selectedTableId]);
 
-  const activeCount = displayTables.filter((t) => t.isActive).length;
-  const occupiedCount = displayTables.length - activeCount;
+  const occupiedCount = displayTables.filter(isTableOccupied).length;
+  const activeCount = displayTables.length - occupiedCount;
 
   return (
     <div className="relative w-full rounded-3xl overflow-hidden bg-[#0a0c10] border border-white/10 shadow-2xl select-none">
@@ -632,6 +529,14 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
           </div>
 
           <div className="bg-[#111827]/90 backdrop-blur-md p-1 rounded-xl border border-white/10 flex flex-wrap items-center gap-1">
+            <button
+              onClick={() => setCameraView('guest')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-black transition-colors ${
+                cameraView === 'guest' ? 'bg-orange-600 text-white shadow-sm' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Guest View
+            </button>
             <button
               onClick={() => setCameraView('iso')}
               className={`px-2.5 py-1 rounded-lg text-xs font-black transition-colors ${
@@ -690,11 +595,11 @@ export const Restaurant3DFloorPlan: React.FC<Restaurant3DFloorPlanProps> = ({
       {/* Hovered or Selected Table Info Tooltip */}
       {hoveredTable && (
         <div className="absolute bottom-4 left-4 z-20 bg-[#111827]/95 backdrop-blur-md border border-orange-500/40 px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 pointer-events-none animate-in fade-in zoom-in-95">
-          <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
+          <div className={`w-3 h-3 rounded-full animate-pulse ${isTableOccupied(hoveredTable) ? 'bg-amber-400' : 'bg-emerald-400'}`} />
           <div>
             <p className="text-xs font-black text-white">{hoveredTable.name}</p>
             <p className="text-[10px] text-orange-400 font-bold">
-              Capacity: {hoveredTable.capacity} Guests · Tap to Select
+              {hoveredTable.capacity} seats · {isTableOccupied(hoveredTable) ? 'Occupied' : 'Available · Tap to sit here'}
             </p>
           </div>
         </div>

@@ -4,7 +4,7 @@ import { Server as SocketIOServer } from "socket.io";
 let io: SocketIOServer | null = null;
 
 // Store connected sockets by role/room
-const rooms = {
+export const rooms = {
   WAITER: 'waiter_room',
   KITCHEN: 'kitchen_room',
   ADMIN: 'admin_room',
@@ -15,44 +15,6 @@ const rooms = {
  */
 export const initializeNotificationService = (socketIO: SocketIOServer) => {
   io = socketIO;
-
-  io.on('connection', (socket) => {
-    console.log('🔌 Client connected:', socket.id);
-
-    // Join room based on role
-    socket.on('join_room', (data: { role: string; tableSessionId?: string }) => {
-      const { role, tableSessionId } = data;
-      
-      // Join role-based room
-      if (role === 'WAITER') {
-        socket.join(rooms.WAITER);
-        console.log(`👤 Socket ${socket.id} joined waiter room`);
-      } else if (role === 'KITCHEN') {
-        socket.join(rooms.KITCHEN);
-        console.log(`👨‍🍳 Socket ${socket.id} joined kitchen room`);
-      } else if (role === 'ADMIN' || role === 'SUPER_ADMIN') {
-        socket.join(rooms.ADMIN);
-        console.log(`👑 Socket ${socket.id} joined admin room`);
-      }
-      
-      // Join table session room for customer tracking
-      if (tableSessionId) {
-        socket.join(`session_${tableSessionId}`);
-        console.log(`🍽️ Socket ${socket.id} joined session room: ${tableSessionId}`);
-      }
-    });
-
-    // Leave room
-    socket.on('leave_room', (room: string) => {
-      socket.leave(room);
-      console.log(`Socket ${socket.id} left room: ${room}`);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('❌ Client disconnected:', socket.id);
-    });
-  });
-
   console.log('✅ Notification service initialized');
 };
 
@@ -242,12 +204,83 @@ export const notifyOrderEstimateUpdated = (data: {
     timestamp: new Date().toISOString(),
   });
 
-  // Global broadcast so guest page always receives updates
-  io.emit('order_estimate_updated', {
-    type: 'ORDER_ESTIMATE_UPDATED',
+};
+
+/** Staff rooms that should see operational events */
+const STAFF_ROOMS = () => [rooms.WAITER, rooms.ADMIN];
+
+/**
+ * Live activity for the owner/staff dashboards (cart adds, orders, bill requests, checkout...)
+ */
+export const notifySessionActivity = (event: {
+  id: string;
+  tableSessionId: string;
+  tableId?: string;
+  tableName?: string;
+  type: string;
+  actor: string;
+  actorName?: string | null;
+  message: string;
+  data?: unknown;
+  createdAt: Date | string;
+}) => {
+  if (!io) return;
+  io.to(STAFF_ROOMS()).emit('session_activity', event);
+};
+
+/**
+ * Tell the guest(s) at a table that staff added items to their order
+ */
+export const notifyItemsAddedByStaff = (data: {
+  tableSessionId: string;
+  orderId: string;
+  addedBy: { name: string; role: string };
+  items: { name: string; quantity: number; price: number }[];
+  totalAmount: number;
+}) => {
+  if (!io) return;
+  io.to(`session_${data.tableSessionId}`).emit('order_items_added', {
+    type: 'ORDER_ITEMS_ADDED',
     ...data,
     timestamp: new Date().toISOString(),
   });
+};
+
+/**
+ * Bill requested: notify the table (all its devices) and staff only
+ */
+export const notifyBillRequested = (order: { id: string; tableSessionId: string | null } & Record<string, any>) => {
+  if (!io) return;
+  const targets = [...STAFF_ROOMS()];
+  if (order.tableSessionId) targets.push(`session_${order.tableSessionId}`);
+  io.to(targets).emit('bill_requested', order);
+};
+
+/**
+ * New order for staff screens (full order payload, scoped to staff rooms)
+ */
+export const notifyStaffNewOrderPayload = (order: unknown) => {
+  if (!io) return;
+  io.to([rooms.WAITER, rooms.KITCHEN, rooms.ADMIN]).emit('new_order', order);
+};
+
+/**
+ * Session closed (paid / checked out): log every device at the table out, and update staff views
+ */
+export const notifySessionClosed = (data: {
+  tableSessionId: string;
+  tableId: string;
+  tableName: string;
+  reason: 'PAID' | 'CLOSED_BY_STAFF';
+  amountPaid?: number | null;
+  method?: string | null;
+}) => {
+  if (!io) return;
+  const payload = { type: 'SESSION_CLOSED', ...data, timestamp: new Date().toISOString() };
+  io.to(`session_${data.tableSessionId}`).emit('session_closed', payload);
+  io.to([rooms.WAITER, rooms.ADMIN]).emit('table_session_closed', payload);
+  // Nobody should keep receiving this table's events
+  io.in(`session_${data.tableSessionId}`).socketsLeave(`session_${data.tableSessionId}`);
 };
 
 export default {
@@ -258,4 +291,9 @@ export default {
   notifyOrderServed,
   notifyOrderStatusChange,
   notifyOrderEstimateUpdated,
+  notifySessionActivity,
+  notifyItemsAddedByStaff,
+  notifyBillRequested,
+  notifyStaffNewOrderPayload,
+  notifySessionClosed,
 };

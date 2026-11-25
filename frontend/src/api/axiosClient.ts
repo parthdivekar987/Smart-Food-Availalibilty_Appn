@@ -1,15 +1,24 @@
 import axios from "axios"
 
-// initial instance axios
+export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api/v1"
+/** Backend origin (no /api/v1), used for sockets and uploaded files */
+export const BACKEND_ORIGIN: string = API_BASE_URL.replace(/\/api\/v1\/?$/, "")
+
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api/v1",
+  baseURL: API_BASE_URL,
+  timeout: 20000,
   headers: {
     "Content-Type": "application/json",
   },
 })
 
-// interceptors
-// automatically attach token to request header
+const clearAuth = () => {
+  localStorage.removeItem("accessToken")
+  localStorage.removeItem("refreshToken")
+  localStorage.removeItem("user")
+}
+
+// Attach the access token to every request
 axiosClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("accessToken")
@@ -18,56 +27,36 @@ axiosClient.interceptors.request.use(
     }
     return config
   },
-  (error) => {
-    return Promise.reject(error)
-  }
+  (error) => Promise.reject(error)
 )
 
-// interceptors response
+// Unwrap response data; transparently refresh an expired access token once
 axiosClient.interceptors.response.use(
-  (response) => {
-    return response.data
-  },
+  (response) => response.data,
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config
 
-    // Nếu lỗi 401 và chưa thử refresh token
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      const refreshToken = localStorage.getItem("refreshToken");
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+      originalRequest._retry = true
+      const refreshToken = localStorage.getItem("refreshToken")
 
       if (refreshToken) {
         try {
-          // Gọi API refresh token (dùng axios gốc để tránh loop vô hạn nếu config sai)
-          const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:4000/api/v1"}/auth/refresh-token`, {
-            refreshToken
-          });
+          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken })
+          const { accessToken } = response.data
 
-          const { accessToken } = response.data;
+          localStorage.setItem("accessToken", accessToken)
+          axiosClient.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`
+          originalRequest.headers["Authorization"] = `Bearer ${accessToken}`
 
-          // Lưu token mới
-          localStorage.setItem("accessToken", accessToken);
-
-          // Cập nhật header cho request hiện tại và các request sau
-          axiosClient.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`;
-          originalRequest.headers["Authorization"] = `Bearer ${accessToken}`;
-
-          // Thực hiện lại request ban đầu
-          return axiosClient(originalRequest);
+          return axiosClient(originalRequest)
         } catch (refreshError) {
-          // Nếu refresh fail (hết hạn hoặc invalid), logout
-          console.error("Session expired:", refreshError);
-          localStorage.removeItem("accessToken");
-          localStorage.removeItem("refreshToken");
-          localStorage.removeItem("user");
-          window.location.href = "/login";
+          console.error("Session expired:", refreshError)
+          clearAuth()
+          window.location.href = "/login"
         }
       } else {
-        // Không có refresh token thì logout luôn
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("user");
-        // window.location.href = "/login"; // Optional redirect
+        clearAuth()
       }
     }
 
@@ -75,5 +64,10 @@ axiosClient.interceptors.response.use(
   }
 )
 
-export default axiosClient
+/** Extract a human-readable message from an API error */
+export const getApiErrorMessage = (error: any, fallback = "Something went wrong. Please try again."): string => {
+  if (!error?.response) return "Cannot reach the server. Please check your connection."
+  return error.response.data?.message || error.response.data?.error || fallback
+}
 
+export default axiosClient

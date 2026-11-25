@@ -1,5 +1,6 @@
 import { redisService } from "../../shared/services/redis.service";
 import prisma from "../../shared/config/prisma.client";
+import { logSessionEventAsync } from "../session/session.service";
 
 import * as tableService from "../table/table.service";
 
@@ -47,6 +48,12 @@ export const startOrGetSession = async (tableId: string, token: string) => {
             status: "OPEN",
             startedAt: new Date(),
         },
+    });
+    logSessionEventAsync({
+        tableSessionId: session.id,
+        type: "SESSION_STARTED",
+        actor: "GUEST",
+        message: `Guest scanned the QR code at ${table.name}`,
     });
 
     return {
@@ -464,4 +471,76 @@ export const createReview = async (
     });
 
     return review;
+};
+
+/**
+ * Public floor-plan listing: active tables with live occupancy.
+ * Exposes no QR secrets.
+ */
+export const getPublicTables = async () => {
+    const tables = await prisma.table.findMany({
+        where: { isActive: true },
+        orderBy: { name: "asc" },
+        select: {
+            id: true,
+            name: true,
+            capacity: true,
+            isActive: true,
+            restaurantId: true,
+            sessions: { where: { status: "OPEN" }, select: { id: true }, take: 1 },
+        },
+    });
+    return tables.map(({ sessions, ...t }) => ({ ...t, isOccupied: sessions.length > 0 }));
+};
+
+/**
+ * Walk-in session: lets a guest open a session without scanning a QR code
+ * (e.g. host seats them, or for demos). Disable with ALLOW_WALK_IN=false.
+ * If tableId is omitted, the first free active table is used.
+ */
+export const startWalkInSession = async (tableId?: string) => {
+    if (process.env.ALLOW_WALK_IN === "false") {
+        const err: any = new Error("Walk-in sessions are disabled. Please scan the QR code on your table.");
+        err.status = 403;
+        throw err;
+    }
+
+    let table;
+    if (tableId) {
+        table = await prisma.table.findFirst({ where: { id: tableId, isActive: true } });
+        if (!table) {
+            const err: any = new Error("Table not found or inactive");
+            err.status = 404;
+            throw err;
+        }
+    } else {
+        table = await prisma.table.findFirst({
+            where: { isActive: true, sessions: { none: { status: "OPEN" } } },
+            orderBy: { name: "asc" },
+        });
+        if (!table) {
+            const err: any = new Error("All tables are currently occupied. Please ask our staff for help.");
+            err.status = 409;
+            throw err;
+        }
+    }
+
+    const existing = await prisma.tableSession.findFirst({
+        where: { tableId: table.id, status: "OPEN" },
+    });
+    const session =
+        existing ??
+        (await prisma.tableSession.create({
+            data: { tableId: table.id, status: "OPEN", startedAt: new Date() },
+        }));
+    if (!existing) {
+        logSessionEventAsync({
+            tableSessionId: session.id,
+            type: "SESSION_STARTED",
+            actor: "GUEST",
+            message: `Walk-in guest seated at ${table.name}`,
+        });
+    }
+
+    return { session, table: { id: table.id, name: table.name, capacity: table.capacity }, isNew: !existing };
 };

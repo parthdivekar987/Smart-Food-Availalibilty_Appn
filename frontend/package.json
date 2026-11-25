@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "npx tsx tests/frontend_unit.test.ts"
+    "test": "npx tsx tests/frontend_unit.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^1.9.7",
@@ -44,5 +45,10 @@
     "@vitejs/plugin-react": "^5.1.2",
     "typescript": "^5.3.3",
     "vite": "^7.3.0"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "@parcel/watcher": true,
+    "core-js": true
   }
 }

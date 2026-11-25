@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import * as guestService from "./guest.service";
+import * as notificationService from "../notification/notification.service";
+import { logSessionEventAsync } from "../session/session.service";
 
 /**
  * Start a table session (Guest scans QR code)
@@ -24,7 +26,7 @@ export const startSession = async (req: Request, res: Response) => {
         });
     } catch (error: any) {
         console.error("Error starting session:", error);
-        res.status(500).json({ error: error.message || "Failed to start session" });
+        res.status(400).json({ message: error.message || "Failed to start session" });
     }
 };
 
@@ -108,10 +110,15 @@ export const requestBill = async (req: Request, res: Response) => {
 
         const updatedOrder = await guestService.requestBill(orderId);
 
-        // Emit socket event for waiter
-        const { io } = require("../../app");
-        if (io) {
-            io.emit("bill_requested", updatedOrder);
+        // Realtime: staff + this table's devices only
+        notificationService.notifyBillRequested(updatedOrder as any);
+        if (updatedOrder.tableSessionId) {
+            logSessionEventAsync({
+                tableSessionId: updatedOrder.tableSessionId,
+                type: "BILL_REQUESTED",
+                actor: "GUEST",
+                message: "Asked for the bill",
+            });
         }
 
         res.json({
@@ -188,5 +195,31 @@ export const createReview = async (req: Request, res: Response) => {
 
         const statusCode = isValidationError ? 400 : 500;
         res.status(statusCode).json({ error: error.message || "Failed to create review" });
+    }
+};
+
+/**
+ * List active tables with occupancy (Public, for floor plan)
+ */
+export const getPublicTables = async (_req: Request, res: Response) => {
+    try {
+        const tables = await guestService.getPublicTables();
+        res.json({ data: tables });
+    } catch (error: any) {
+        console.error("Error fetching tables:", error);
+        res.status(500).json({ message: "Failed to fetch tables" });
+    }
+};
+
+/**
+ * Start a walk-in session without a QR token (Public, can be disabled)
+ */
+export const startWalkInSession = async (req: Request, res: Response) => {
+    try {
+        const { tableId } = req.body || {};
+        const result = await guestService.startWalkInSession(tableId);
+        res.status(result.isNew ? 201 : 200).json(result);
+    } catch (error: any) {
+        res.status(error.status || 500).json({ message: error.message || "Failed to start session" });
     }
 };

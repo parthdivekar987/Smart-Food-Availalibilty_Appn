@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ModifierGroup, ModifierOption } from '../../types';
 import { menuApi } from '../../api/menuApi';
 import { Plus, Trash2, Edit2, X, ChevronDown, ChevronRight, Save } from 'lucide-react';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 interface ModifierManagerProps {
     menuItemId: string;
@@ -199,7 +200,7 @@ export default function ModifierManager({ menuItemId }: ModifierManagerProps) {
                                         <div key={option.id} className="flex justify-between items-center p-2 rounded border border-gray-100 bg-white hover:border-gray-200 group/option">
                                             <span className="text-sm text-gray-700">{option.name}</span>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-sm font-semibold text-orange-600">+{option.priceDelta.toLocaleString()}đ</span>
+                                                <span className="text-sm font-semibold text-orange-600">+{formatCurrency(option.priceDelta)}</span>
                                                 <button 
                                                     onClick={() => handleDeleteOption(option.id)}
                                                     className="text-gray-300 hover:text-red-500 opacity-0 group-hover/option:opacity-100 transition-opacity"

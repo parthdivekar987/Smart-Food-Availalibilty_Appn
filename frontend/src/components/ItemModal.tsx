@@ -6,6 +6,7 @@ import { Star, MessageSquarePlus, ChevronDown, Box, Sparkles, Image as ImageIcon
 import { guestApi } from '../api/guestApi';
 import { toast } from 'react-hot-toast';
 import Dish3DViewer from './3d/Dish3DViewer';
+import { formatCurrency } from '../utils/formatCurrency';
 
 interface Props {
   item: MenuItem;
@@ -184,7 +185,7 @@ export default function ItemModal({ item, relatedItems = [], onSelectRelated, on
         <div className="flex-1 overflow-y-auto p-5 pb-24">
           <div className="flex justify-between items-start mb-2">
             <h2 className="text-2xl font-black text-gray-800 leading-tight">{item.name}</h2>
-            <span className="text-xl font-bold text-orange-600 shrink-0 ml-4">{item.price.toLocaleString('vi-VN')}đ</span>
+            <span className="text-xl font-bold text-orange-600 shrink-0 ml-4">{formatCurrency(item.price)}</span>
           </div>
           <p className="text-gray-500 mb-6 text-sm leading-relaxed">{item.description}</p>
 
@@ -219,7 +220,7 @@ export default function ItemModal({ item, relatedItems = [], onSelectRelated, on
                       <span className="font-medium text-gray-700">{opt.name}</span>
                     </div>
                     {opt.priceDelta > 0 && (
-                      <span className="text-gray-500 font-medium text-sm">+{opt.priceDelta.toLocaleString('vi-VN')}đ</span>
+                      <span className="text-gray-500 font-medium text-sm">+{formatCurrency(opt.priceDelta)}</span>
                     )}
                   </label>
                 ))}
@@ -250,7 +251,7 @@ export default function ItemModal({ item, relatedItems = [], onSelectRelated, on
                     </div>
                     <div>
                       <div className="font-bold text-xs text-gray-800 line-clamp-1">{r.name}</div>
-                      <div className="text-orange-600 font-bold text-xs">{r.price.toLocaleString('vi-VN')}đ</div>
+                      <div className="text-orange-600 font-bold text-xs">{formatCurrency(r.price)}</div>
                     </div>
                   </div>
                 ))}
@@ -372,7 +373,7 @@ export default function ItemModal({ item, relatedItems = [], onSelectRelated, on
               >
                 <span>Add</span>
                 <span>•</span>
-                <span>{(item.price * quantity).toLocaleString('vi-VN')}đ</span>
+                <span>{formatCurrency((item.price * quantity))}</span>
               </button>
             </div>
           ) : (

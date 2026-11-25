@@ -20,6 +20,10 @@ const optionalAuth = (req: Request, res: Response, next: NextFunction) => {
 // Start table session (Guest scans QR code)
 router.post("/session", guestController.startSession);
 
+// Floor plan + walk-in seating (no QR)
+router.get("/tables", guestController.getPublicTables);
+router.post("/walk-in", guestController.startWalkInSession);
+
 // Get all categories
 router.get("/categories", guestController.getCategories);
 

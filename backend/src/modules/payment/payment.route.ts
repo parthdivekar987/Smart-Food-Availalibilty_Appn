@@ -7,6 +7,7 @@ const router = Router();
 
 // Stripe
 router.post('/create-intent', paymentController.createPaymentIntent);
+router.post('/stripe/verify', paymentController.verifyStripePayment);
 
 // Cash/Manual confirmation
 router.post('/confirm-cash', authMiddleware, roleGuard([Role.ADMIN, Role.WAITER, Role.SUPER_ADMIN]), paymentController.confirmCashPayment);

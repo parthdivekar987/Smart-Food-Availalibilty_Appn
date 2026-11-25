@@ -2,78 +2,86 @@ import { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
 import prisma from "../../shared/config/prisma.client";
+import { getUploadedFileUrl } from "../../middleware/upload";
+import { redisService } from "../../shared/services/redis.service";
+
+const invalidateMenu = () => redisService.invalidateMenuCache().catch(() => {});
 
 export const uploadPhotos = async (req: Request, res: Response) => {
     try {
         const { itemId } = req.params;
         const files = req.files as Express.Multer.File[];
 
-        if (!files || files.length === 0) return res.status(400).json({ error: "Không có file nào" });
+        if (!files || files.length === 0) return res.status(400).json({ message: "No files uploaded" });
 
-// Don't need BACKEND_URL anymore for Cloudinary
-        // const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 4000}`;
-
-        // Lưu thông tin từng ảnh vào DB
-        const photoData = files.map(file => ({
+        // Make the first photo primary if the item has none yet
+        const hasPrimary = await prisma.menuItemPhoto.count({ where: { menuItemId: itemId, isPrimary: true } });
+        const photoData = files.map((file, i) => ({
             menuItemId: itemId,
-            url: (file as any).secure_url,
-            isPrimary: false
+            url: getUploadedFileUrl(file),
+            isPrimary: hasPrimary === 0 && i === 0,
         }));
 
         await prisma.menuItemPhoto.createMany({ data: photoData });
+        await invalidateMenu();
 
-        res.status(201).json({ message: "Tải ảnh lên thành công" });
+        res.status(201).json({ message: "Photos uploaded successfully" });
     } catch (error) {
         console.error("Upload error:", error);
-        res.status(500).json({ error: "Lỗi tải ảnh" });
+        res.status(500).json({ message: "Failed to upload photos" });
     }
 };
 
 export const setPrimaryPhoto = async (req: Request, res: Response) => {
-    const { photoId, itemId } = req.body;
+    try {
+        const { photoId, itemId } = req.body;
+        if (!photoId || !itemId) return res.status(400).json({ message: "photoId and itemId are required" });
 
-    await prisma.$transaction([
-        // Reset toàn bộ ảnh của món đó về false
-        prisma.menuItemPhoto.updateMany({
-            where: { menuItemId: itemId },
-            data: { isPrimary: false }
-        }),
-        // Set ảnh được chọn làm Primary
-        prisma.menuItemPhoto.update({
-            where: { id: photoId },
-            data: { isPrimary: true }
-        })
-    ]);
+        await prisma.$transaction([
+            prisma.menuItemPhoto.updateMany({
+                where: { menuItemId: itemId },
+                data: { isPrimary: false },
+            }),
+            prisma.menuItemPhoto.update({
+                where: { id: photoId },
+                data: { isPrimary: true },
+            }),
+        ]);
+        await invalidateMenu();
 
-    res.json({ message: "Đã thiết lập ảnh chính" });
+        res.json({ message: "Primary photo updated" });
+    } catch (error) {
+        console.error("Set primary photo error:", error);
+        res.status(500).json({ message: "Failed to update primary photo" });
+    }
 };
 
 export const deletePhoto = async (req: Request, res: Response) => {
     try {
         const { photoId } = req.params;
 
-        // 1. Tìm thông tin ảnh trước khi xóa trong DB
         const photo = await prisma.menuItemPhoto.findUnique({ where: { id: photoId } });
-        if (!photo) return res.status(404).json({ error: "Không tìm thấy ảnh" });
+        if (!photo) return res.status(404).json({ message: "Photo not found" });
 
-        // 2. Xóa bản ghi trong Database
         await prisma.menuItemPhoto.delete({ where: { id: photoId } });
 
-        // 3. (Optional) Xóa file trên Cloudinary -> Cần dùng Cloudinary API riêng
-        // Phần xóa file local cũ không còn tác dụng với ảnh mới, giữ lại check file local để xóa ảnh cũ (backward compatibility)
-        if (photo.url.includes('/uploads/')) {
-             const fileName = photo.url.split('/').pop();
-             if (fileName) {
-                 const filePath = path.join(__dirname, "../../../uploads", fileName);
-                 if (fs.existsSync(filePath)) {
-                     fs.unlinkSync(filePath); // Xóa file cũ còn sót lại
-                 }
-             }
+        // Promote another photo to primary if we removed the primary one
+        if (photo.isPrimary) {
+            const next = await prisma.menuItemPhoto.findFirst({ where: { menuItemId: photo.menuItemId } });
+            if (next) await prisma.menuItemPhoto.update({ where: { id: next.id }, data: { isPrimary: true } });
         }
-        // TODO: Implement Cloudinary deletion if needed
 
-        res.json({ message: "Đã xóa ảnh thành công" });
+        // Remove locally stored files (Cloudinary assets are left in place)
+        if (photo.url.includes("/uploads/")) {
+            const fileName = path.basename(photo.url);
+            const filePath = path.join(__dirname, "../../../uploads", fileName);
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        }
+        await invalidateMenu();
+
+        res.json({ message: "Photo deleted" });
     } catch (error) {
-        res.status(500).json({ error: "Lỗi khi xóa ảnh" });
+        console.error("Delete photo error:", error);
+        res.status(500).json({ message: "Failed to delete photo" });
     }
 };

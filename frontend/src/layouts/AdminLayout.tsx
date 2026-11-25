@@ -6,6 +6,7 @@ import {
   Utensils,
   Table as TableIcon,
   ClipboardList,
+  Activity,
   LogOut,
   ChefHat,
   ChevronRight,
@@ -39,6 +40,7 @@ const AdminLayout = () => {
     { path: '/admin/menu', name: 'Menu Management', icon: <Utensils size={18} /> },
     { path: '/admin/categories', name: 'Categories', icon: <Layers size={18} /> },
     { path: '/admin/tables', name: 'Tables & QR', icon: <TableIcon size={18} /> },
+    { path: '/admin/live', name: 'Live Tables', icon: <Activity size={18} /> },
     { path: '/admin/orders', name: 'Live Orders', icon: <ClipboardList size={18} /> },
     { path: '/admin/users', name: 'Customers', icon: <User size={18} /> },
     { path: '/admin/employees', name: 'Employees', icon: <Users size={18} /> },
@@ -49,6 +51,7 @@ const AdminLayout = () => {
     { path: '/admin', name: 'Dashboard', icon: <LayoutDashboard size={20} />, exact: true },
     { path: '/admin/menu', name: 'Menu Mgmt', icon: <Utensils size={20} /> },
     { path: '/admin/tables', name: 'Tables', icon: <TableIcon size={20} /> },
+    { path: '/admin/live', name: 'Live', icon: <Activity size={20} /> },
     { path: '/admin/orders', name: 'Orders', icon: <ClipboardList size={20} /> },
   ];
 

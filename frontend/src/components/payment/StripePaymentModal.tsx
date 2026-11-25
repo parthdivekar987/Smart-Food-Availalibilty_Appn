@@ -4,10 +4,12 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { paymentApi } from '../../api/paymentApi';
 import { X, Loader2, CheckCircle, AlertCircle, CreditCard } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { getApiErrorMessage } from '../../api/axiosClient';
+import { formatCurrency } from '../../utils/formatCurrency';
 
-// Initialize Stripe outside of component to avoid recreating it on every render
-// Replace with your actual Publishable Key from env or constant
-const stripePromise = loadStripe('pk_test_51QyD0eP9X3rL8z9X1QyD0eP9X3rL8z9X1QyD0eP9X3rL8z9X1QyD0eP9X3rL8z9X'); 
+// Publishable key comes from VITE_STRIPE_PUBLISHABLE_KEY; card payments are disabled without it.
+const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
+const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
 
 interface StripePaymentModalProps {
   orderId: string;
@@ -31,7 +33,7 @@ const CheckoutForm = ({ onSuccess, amount }: { onSuccess: () => void, amount: nu
 
     setIsProcessing(true);
 
-    const { error } = await stripe.confirmPayment({
+    const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
         // Return URL is required but we handle it via redirect or same page.
@@ -46,9 +48,15 @@ const CheckoutForm = ({ onSuccess, amount }: { onSuccess: () => void, amount: nu
       setErrorMessage(error.message || 'Payment failed');
       setIsProcessing(false);
     } else {
-      // Payment successful
-      toast.success('Payment successful!');
-      onSuccess();
+      // Record the payment server-side (verified against Stripe), then close the session
+      try {
+        if (paymentIntent?.id) await paymentApi.verifyStripePayment(paymentIntent.id);
+        toast.success('Payment successful! Thank you.');
+        onSuccess();
+      } catch (err) {
+        setErrorMessage(getApiErrorMessage(err, 'Payment went through but could not be recorded. Please show this screen to your server.'));
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -57,7 +65,7 @@ const CheckoutForm = ({ onSuccess, amount }: { onSuccess: () => void, amount: nu
       <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
         <div className="flex justify-between items-center mb-4">
           <span className="text-sm font-bold text-gray-500">Total to pay</span>
-          <span className="text-2xl font-black text-gray-900">{amount.toLocaleString('vi-VN')}đ</span>
+          <span className="text-2xl font-black text-gray-900">{formatCurrency(amount)}</span>
         </div>
         <PaymentElement />
       </div>
@@ -97,6 +105,11 @@ export default function StripePaymentModal({ orderId, amount, onClose, onSuccess
 
   useEffect(() => {
     const initPayment = async () => {
+      if (!stripePromise) {
+        setError('Card payments are not configured. Please pay your server at the table.');
+        setLoading(false);
+        return;
+      }
       try {
         const res: any = await paymentApi.createStripeIntent(orderId);
         // Backend returns { clientSecret, paymentId }
@@ -111,7 +124,7 @@ export default function StripePaymentModal({ orderId, amount, onClose, onSuccess
         }
       } catch (err: any) {
         console.error("Stripe Intent Error", err);
-        setError(err.response?.data?.message || "Failed to initialize payment");
+        setError(getApiErrorMessage(err, "Failed to initialize payment"));
       } finally {
         setLoading(false);
       }

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { userApi } from '../../api/userApi';
 import { useAuthStore } from '../../store/useAuthStore';
+import { getPhotoUrl } from '../../utils/photoUrl';
 import {
     User, Mail, Calendar, Shield, Save, ArrowLeft, Camera, Lock,
     Eye, EyeOff, ShoppingBag, Clock, ChevronRight, Package, LogOut
@@ -9,6 +10,7 @@ import {
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import toast from 'react-hot-toast';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 interface UserProfile {
     id: string;
@@ -275,7 +277,7 @@ const ProfilePage = () => {
     }
 
     const avatarUrl = profile.avatarUrl
-        ? (profile.avatarUrl.startsWith('http') ? profile.avatarUrl : `http://localhost:4000${profile.avatarUrl}`)
+        ? getPhotoUrl(profile.avatarUrl)
         : null;
 
     return (
@@ -303,7 +305,7 @@ const ProfilePage = () => {
                 </div>
             </div>
 
-            <div className="max-w-lg mx-auto px-4 py-4 pb-24">
+            <div className="max-w-lg mx-auto px-4 py-4 pb-8">
                 {/* Profile Card - Mobile optimized */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
                     <div className="bg-gradient-to-r from-orange-50 to-orange-100/50 p-4 sm:p-6">
@@ -494,7 +496,7 @@ const ProfilePage = () => {
                                                         </div>
                                                     </div>
                                                     <div className="text-right flex-shrink-0">
-                                                        <p className="font-bold text-orange-600 text-sm">{order.totalAmount.toLocaleString()}đ</p>
+                                                        <p className="font-bold text-orange-600 text-sm">{formatCurrency(order.totalAmount)}</p>
                                                         <p className="text-xs text-gray-400">{order.items.length} items</p>
                                                     </div>
                                                 </div>
@@ -509,7 +511,7 @@ const ProfilePage = () => {
                                                                 <div key={item.id} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg">
                                                                     <div className="w-10 h-10 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
                                                                         {item.menuItem.photos?.[0]?.url ? (
-                                                                            <img src={`http://localhost:4000${item.menuItem.photos[0].url}`} alt={item.menuItem.name} className="w-full h-full object-cover" />
+                                                                            <img src={getPhotoUrl(item.menuItem.photos[0].url)} alt={item.menuItem.name} className="w-full h-full object-cover" />
                                                                         ) : (
                                                                             <div className="w-full h-full flex items-center justify-center">
                                                                                 <ShoppingBag size={14} className="text-gray-400" />

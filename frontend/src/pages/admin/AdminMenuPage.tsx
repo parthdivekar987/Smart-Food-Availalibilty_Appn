@@ -12,7 +12,9 @@ import ModifierManager from '../../modules/admin/ModifierManager';
 import MenuItemDetail from '../../modules/admin/MenuItemDetail';
 import { Layers, Edit, Trash2, Plus, X, Search, Filter } from 'lucide-react';
 import { getPhotoUrl } from '../../utils/photoUrl';
-import { MOCK_CATEGORIES, MOCK_ITEMS } from '../../api/mockData';
+import toast from 'react-hot-toast';
+import { getApiErrorMessage } from '../../api/axiosClient';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 const MySwal = withReactContent(Swal);
 
@@ -78,20 +80,6 @@ export default function AdminMenuPage() {
         }
       }
 
-      // Seamless fallback if API is starting up or empty so admin table is always populated
-      if (!fetchedItems || fetchedItems.length === 0) {
-        let fallback = [...MOCK_ITEMS];
-        if (selectedCategory) {
-          fallback = fallback.filter(i => i.categoryId === selectedCategory);
-        }
-        if (debouncedSearch) {
-          const q = debouncedSearch.toLowerCase().trim();
-          fallback = fallback.filter(i => i.name.toLowerCase().includes(q) || (i.description && i.description.toLowerCase().includes(q)));
-        }
-        fetchedItems = fallback.slice((page - 1) * limit, page * limit);
-        totalP = Math.ceil(fallback.length / limit) || 1;
-      }
-
       setItems(fetchedItems);
       setTotalPages(totalP);
 
@@ -99,15 +87,13 @@ export default function AdminMenuPage() {
       if (rawCats && rawCats.data && Array.isArray(rawCats.data)) {
         rawCats = rawCats.data;
       }
-      const resolvedCats = Array.isArray(rawCats) && rawCats.length > 0 ? rawCats : MOCK_CATEGORIES;
+      const resolvedCats: Category[] = Array.isArray(rawCats) ? rawCats : [];
       setCategories(resolvedCats);
     } catch (error) {
       console.error("Error fetching data", error);
-      let fallback = [...MOCK_ITEMS];
-      if (selectedCategory) fallback = fallback.filter(i => i.categoryId === selectedCategory);
-      setItems(fallback.slice((page - 1) * limit, page * limit));
-      setTotalPages(Math.ceil(fallback.length / limit) || 1);
-      setCategories(MOCK_CATEGORIES);
+      toast.error(getApiErrorMessage(error, "Failed to load menu"));
+      setItems([]);
+      setTotalPages(1);
     }
   };
 
@@ -311,7 +297,7 @@ export default function AdminMenuPage() {
                   {item.category?.name || categories.find(c => c.id === item.categoryId)?.name}
                 </td>
                 <td className="p-4 font-bold text-orange-600">
-                  {item.price.toLocaleString()}đ
+                  {formatCurrency(item.price)}
                 </td>
 
                 {/* MODIFIERS COLUMN */}

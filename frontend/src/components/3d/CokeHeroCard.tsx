@@ -5,6 +5,7 @@ import { Sparkles, ShoppingBag, Volume2, VolumeX, RotateCcw, Droplets } from 'lu
 import { MenuItem } from '../../types';
 import { useCartStore } from '../../store/useCartStore';
 import toast from 'react-hot-toast';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 interface CokeHeroCardProps {
   cokeItem?: MenuItem;
@@ -431,7 +432,7 @@ export const CokeHeroCard: React.FC<CokeHeroCardProps> = ({ cokeItem, onView3D }
       <div className="flex items-center justify-between gap-3 relative z-10 pt-2 border-t border-white/10">
         <div>
           <span className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold block">Serving Price</span>
-          <span className="text-xl font-black text-white">{item.price.toLocaleString()}đ</span>
+          <span className="text-xl font-black text-white">{formatCurrency(item.price)}</span>
         </div>
 
         <div className="flex gap-2">

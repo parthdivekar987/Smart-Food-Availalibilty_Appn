@@ -1,6 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { X, Printer, Download, Percent, DollarSign, Check } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import { formatCurrency as formatMoney, CURRENCY, LOCALE, TAX_RATE } from '../../utils/formatCurrency';
+import type { StaffPaymentMethod } from '../../api/paymentApi';
 
 interface OrderItem {
     id: string;
@@ -28,16 +30,15 @@ interface BillModalProps {
     onConfirmPayment?: (orderId: string, paymentData: PaymentData) => void;
 }
 
-type PaymentMethodType = 'CASH' | 'CARD' | 'RAZORPAY' | 'MOMO' | 'ZALOPAY' | 'VNPAY';
+type PaymentMethodType = StaffPaymentMethod;
 
-interface PaymentData {
+export interface PaymentData {
     paymentMethod: PaymentMethodType;
     discountAmount: number;
     discountType: 'PERCENTAGE' | 'FIXED' | null;
     finalAmount: number;
 }
 
-const TAX_RATE = 0.1; // 10% VAT
 
 const BillModal: React.FC<BillModalProps> = ({ order, onClose, onConfirmPayment }) => {
     const billRef = useRef<HTMLDivElement>(null);
@@ -60,10 +61,9 @@ const BillModal: React.FC<BillModalProps> = ({ order, onClose, onConfirmPayment 
 
     const total = Math.max(0, subtotalWithTax - discountAmount);
 
-    const formatCurrency = (amount: number, isPdf = false) => {
-        const formatted = Math.round(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-        return isPdf ? `${formatted} VND` : `${formatted}đ`;
-    };
+    // jsPDF built-in fonts cannot render symbols like the rupee sign, so PDFs use the ISO code
+    const formatCurrency = (amount: number, isPdf = false) =>
+        isPdf ? `${CURRENCY} ${Math.round(amount).toLocaleString(LOCALE)}` : formatMoney(amount);
 
     const handlePrintBill = () => {
         const printContent = billRef.current;
@@ -178,7 +178,7 @@ const BillModal: React.FC<BillModalProps> = ({ order, onClose, onConfirmPayment 
         doc.text(formatCurrency(subtotal, true), 75, yPos, { align: 'right' });
         yPos += 4;
 
-        doc.text(`VAT (${TAX_RATE * 100}%):`, marginLeft, yPos);
+        doc.text(`Tax (${+(TAX_RATE * 100).toFixed(2)}%):`, marginLeft, yPos);
         doc.text(formatCurrency(tax, true), 75, yPos, { align: 'right' });
         yPos += 4;
 
@@ -275,7 +275,7 @@ const BillModal: React.FC<BillModalProps> = ({ order, onClose, onConfirmPayment 
                                 <span>{formatCurrency(subtotal)}</span>
                             </div>
                             <div className="flex justify-between text-gray-500">
-                                <span>VAT ({TAX_RATE * 100}%)</span>
+                                <span>Tax ({+(TAX_RATE * 100).toFixed(2)}%)</span>
                                 <span>{formatCurrency(tax)}</span>
                             </div>
                             {discountAmount > 0 && (
@@ -307,7 +307,7 @@ const BillModal: React.FC<BillModalProps> = ({ order, onClose, onConfirmPayment 
                         <div>
                             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Payment Method</h3>
                             <div className="grid grid-cols-3 gap-2">
-                                {(['CASH', 'RAZORPAY', 'CARD', 'MOMO', 'ZALOPAY', 'VNPAY'] as PaymentMethodType[]).map((method) => (
+                                {(['CASH', 'CARD', 'MOMO', 'ZALOPAY', 'VNPAY'] as PaymentMethodType[]).map((method) => (
                                     <button
                                         key={method}
                                         onClick={() => setPaymentMethod(method)}

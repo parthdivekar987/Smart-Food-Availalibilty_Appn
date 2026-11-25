@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useCartStore } from '../store/useCartStore';
 import { useSessionStore } from '../store/useSessionStore';
 import { guestApi } from '../api/guestApi';
+import { getApiErrorMessage } from '../api/axiosClient';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, ShoppingBag, ChefHat, X, Minus, Plus, FileText, Sparkles, ArrowRight, Utensils, Receipt } from 'lucide-react';
 import { getPhotoUrl } from '../utils/photoUrl';
+import { formatCurrency } from '../utils/formatCurrency';
 
 export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { items, totalAmount, clearCart, updateQuantity, removeFromCart } = useCartStore();
@@ -14,6 +16,7 @@ export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClos
   const activeOrderId = useSessionStore(state => state.activeOrderId);
   const setActiveOrder = useSessionStore(state => state.setActiveOrder);
   const addOrderToHistory = useSessionStore(state => state.addOrderToHistory);
+  const resetSession = useSessionStore(state => state.resetSession);
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderNotes, setOrderNotes] = useState('');
   const [orderSuccess, setOrderSuccess] = useState(false);
@@ -21,7 +24,9 @@ export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClos
 
   const handleOrder = async () => {
     if (!sessionId) {
-      toast.error("Session not found! Please scan QR code again.");
+      toast.error("Please scan your table QR code or get seated before ordering.");
+      onClose();
+      navigate("/");
       return;
     }
     if (items.length === 0) {
@@ -77,10 +82,15 @@ export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClos
         onClose();
         navigate('/tracking');
       }, 2200);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to place order. Please try again.");
+    } catch (error: any) {
+      toast.error(getApiErrorMessage(error, "Failed to place order. Please try again."));
       setIsOrdering(false);
+      if (error?.response?.status === 409) {
+        // Session closed (e.g. bill already paid): start over
+        resetSession();
+        onClose();
+        navigate("/");
+      }
     }
   };
 
@@ -267,7 +277,7 @@ export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClos
                                   </button>
                                 </div>
                                 <span className="font-black text-sm sm:text-base text-gray-900">
-                                  {(item.totalPrice * item.quantity).toLocaleString('vi-VN')}đ
+                                  {formatCurrency((item.totalPrice * item.quantity))}
                                 </span>
                               </div>
                             </div>
@@ -302,7 +312,7 @@ export default function CartModal({ isOpen, onClose }: { isOpen: boolean; onClos
                   <div className="flex justify-between items-center mb-4">
                     <span className="font-bold text-gray-600">Total</span>
                     <div className="text-right">
-                      <span className="text-2xl font-black text-gray-900">{totalAmount().toLocaleString('vi-VN')}đ</span>
+                      <span className="text-2xl font-black text-gray-900">{formatCurrency(totalAmount())}</span>
                     </div>
                   </div>
 

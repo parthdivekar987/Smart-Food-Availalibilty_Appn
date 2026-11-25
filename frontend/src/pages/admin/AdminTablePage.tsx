@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { tableApi } from '../../api/tableApi';
-import axiosClient from '../../api/axiosClient';
+import axiosClient, { getApiErrorMessage } from '../../api/axiosClient';
+import toast from 'react-hot-toast';
 import { Table } from '../../types';
 import { ui } from '../../utils/swalHelper';
 import { RefreshCw, LayoutGrid, Layers, Sparkles } from 'lucide-react';
 import { jsPDF } from "jspdf";
 import Restaurant3DFloorPlan from '../../components/3d/Restaurant3DFloorPlan';
 
-import { MOCK_TABLES } from '../../api/mockData';
 
 export default function AdminTablePage() {
   const [tables, setTables] = useState<Table[]>([]);
@@ -27,8 +27,8 @@ export default function AdminTablePage() {
   const [editingTable, setEditingTable] = useState<Table | null>(null);
 
   // Dynamic frontend URL: on localhost, prioritize local network IP so phone cameras scanning the screen can connect!
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const frontendUrl = isLocalhost ? 'http://192.168.1.3:5173' : window.location.origin;
+  // Public URL guests reach (set VITE_FRONTEND_URL to a LAN/public address so phones can scan QR codes)
+  const frontendUrl = (import.meta.env.VITE_FRONTEND_URL as string) || window.location.origin;
 
   useEffect(() => {
     fetchData();
@@ -39,11 +39,11 @@ export default function AdminTablePage() {
     try {
       const tableRes = await tableApi.getTables();
       const raw = (tableRes as any).data?.data || (tableRes as any).data || tableRes;
-      const tablesList = Array.isArray(raw) && raw.length > 0 ? raw : MOCK_TABLES;
+      const tablesList = Array.isArray(raw) ? raw : [];
       setTables(tablesList);
     } catch (error) {
-      console.warn("Using mock tables for 3D floor plan and QR codes:", error);
-      setTables(MOCK_TABLES);
+      toast.error(getApiErrorMessage(error, "Failed to load tables"));
+      setTables([]);
     } finally {
       setLoading(false);
     }
@@ -278,6 +278,7 @@ export default function AdminTablePage() {
         <div className="mb-8">
           <Restaurant3DFloorPlan
             tables={tables}
+            defaultView="iso"
             onSelectTable={(table) => setSelectedQR(table)}
           />
         </div>

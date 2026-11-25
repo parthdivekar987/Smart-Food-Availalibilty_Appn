@@ -33,9 +33,9 @@ router.get('/google/callback',
     const accessToken = generateAccessToken(user.id, user.role);
     const refreshToken = generateRefreshToken(user.id);
 
-    // Redirect về Frontend kèm Token trên URL (Frontend sẽ cắt lấy token này lưu vào storage)
-    // Lưu ý: Đây là cách đơn giản, thực tế có thể dùng cookie an toàn hơn
-    res.redirect(`https://smart-restaurant-fe.onrender.com/oauth-success?accessToken=${accessToken}&refreshToken=${refreshToken}&role=${user.role}`);
+    // Redirect back to the frontend with tokens in the URL; the OAuth success page stores them.
+    const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+    res.redirect(`${frontendUrl}/oauth-success?accessToken=${accessToken}&refreshToken=${refreshToken}&role=${user.role}`);
   }
 );
 export default router;

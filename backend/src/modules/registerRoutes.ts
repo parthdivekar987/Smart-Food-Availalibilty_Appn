@@ -7,6 +7,7 @@ import guestRoutes from "./guest/guest.routes";
 import orderRoutes from "./order/order.routes";
 import reportRoutes from "./report/report.route";
 import paymentRoutes from "./payment/payment.route";
+import sessionRoutes from "./session/session.routes";
 
 const router = Router();
 
@@ -20,6 +21,7 @@ router.use("/guest", guestRoutes); // Public guest routes
 router.use("/orders", orderRoutes); // Order routes (some public, some protected)
 router.use("/reports", reportRoutes);
 router.use("/payment", paymentRoutes);
+router.use("/sessions", sessionRoutes); // Table session status, live tables & activity
 
 export default router;
 

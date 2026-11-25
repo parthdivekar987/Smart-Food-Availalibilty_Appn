@@ -46,6 +46,12 @@ router.patch(
 );
 
 // Complete Order and Close Session - Waiter (Simple payment confirmation)
+// Staff adds items to a seated table (guest is notified in real time)
+router.post(
+    "/session/:sessionId/items",
+    roleGuard([Role.WAITER, Role.ADMIN, Role.SUPER_ADMIN]),
+    OrderController.addItemsByStaff
+);
 router.post(
     "/:id/complete",
     roleGuard([Role.WAITER, Role.ADMIN, Role.SUPER_ADMIN]),

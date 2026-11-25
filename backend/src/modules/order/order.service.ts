@@ -2,6 +2,7 @@ import { OrderStatus } from "@prisma/client";
 import * as notificationService from "../notification/notification.service";
 import prisma from "../../shared/config/prisma.client";
 import { redisService } from "../../shared/services/redis.service";
+import { finalizeClosedSession, logSessionEventAsync } from "../session/session.service";
 
 // Types for order creation
 interface OrderItemInput {
@@ -16,6 +17,8 @@ interface CreateOrderInput {
     tableSessionId: string;
     items: OrderItemInput[];
     userId?: string;
+    /** Set when a waiter/admin adds items on the guest's behalf */
+    addedBy?: { id: string; name: string; role: string };
 }
 
 // Include configuration for order queries
@@ -44,38 +47,65 @@ const orderInclude = {
  * Create a new order or add items to existing order for a table session
  */
 export const createOrder = async (data: CreateOrderInput) => {
-    const { tableSessionId, items, userId } = data;
+    const { tableSessionId, items, userId, addedBy } = data;
 
-    // 1. Check if session is valid and open; if missing (e.g. demo guest order), auto-create or link to available table
-    let session = await prisma.tableSession.findUnique({
+    // 1. Session must exist and be open (sessions come from QR scan or walk-in seating)
+    if (!tableSessionId) {
+        const err: any = new Error("tableSessionId is required");
+        err.status = 400;
+        throw err;
+    }
+    const session = await prisma.tableSession.findUnique({
         where: { id: tableSessionId },
     });
-
     if (!session || session.status !== "OPEN") {
-        let table = await prisma.table.findFirst();
-        if (!table) {
-            let restaurant = await prisma.restaurant.findFirst();
-            if (!restaurant) {
-                restaurant = await prisma.restaurant.create({
-                    data: { name: "Smart Restaurant Luxury Dining", address: "123 Culinary Boulevard" }
-                });
-            }
-            table = await prisma.table.create({
-                data: { name: "Table 01 (Window)", capacity: 4, restaurantId: restaurant.id }
-            });
-        }
-        session = await prisma.tableSession.upsert({
-            where: { id: tableSessionId },
-            update: { status: "OPEN" },
-            create: {
-                id: tableSessionId,
-                tableId: table.id,
-                status: "OPEN"
-            }
-        });
+        const err: any = new Error("Your table session has ended. Please scan the table QR code again.");
+        err.status = 409;
+        throw err;
     }
 
-    // 2. Use Transaction to ensure data integrity
+    // 2. Validate cart and price everything from the database (never trust client prices)
+    const badRequest = (message: string) => Object.assign(new Error(message), { status: 400 });
+    if (!Array.isArray(items) || items.length === 0) throw badRequest("Your cart is empty");
+
+    const menuItemIds = [...new Set(items.map((i) => i.id))];
+    const menuItems = await prisma.menuItem.findMany({
+        where: { id: { in: menuItemIds } },
+        select: { id: true, name: true, price: true, status: true },
+    });
+    const menuById = new Map(menuItems.map((m) => [m.id, m]));
+
+    const optionIds = items.flatMap((i) =>
+        Object.values(i.selectedModifiers || {}).flat().map((o) => o.id)
+    );
+    const options = optionIds.length
+        ? await prisma.modifierOption.findMany({
+            where: { id: { in: optionIds } },
+            select: { id: true, priceDelta: true, modifierGroup: { select: { menuItemId: true } } },
+        })
+        : [];
+    const optionById = new Map(options.map((o) => [o.id, o]));
+
+    for (const item of items) {
+        const menuItem = menuById.get(item.id);
+        if (!menuItem) throw badRequest("One of the dishes in your cart is no longer on the menu");
+        if (menuItem.status !== "AVAILABLE") throw badRequest(`${menuItem.name} is currently unavailable`);
+        if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 50) {
+            throw badRequest(`Invalid quantity for ${menuItem.name}`);
+        }
+        item.price = menuItem.price;
+        for (const groupId in item.selectedModifiers || {}) {
+            for (const opt of item.selectedModifiers![groupId]) {
+                const dbOpt = optionById.get(opt.id);
+                if (!dbOpt || dbOpt.modifierGroup.menuItemId !== item.id) {
+                    throw badRequest(`Invalid option selected for ${menuItem.name}`);
+                }
+                opt.priceDelta = dbOpt.priceDelta;
+            }
+        }
+    }
+
+    // 3. Use Transaction to ensure data integrity
     const result = await prisma.$transaction(async (tx) => {
         // Find or create Order for this session (1 table = 1 order)
         let order = await tx.order.findUnique({
@@ -221,6 +251,38 @@ export const createOrder = async (data: CreateOrderInput) => {
 
         return enrichedOrder;
     });
+
+    // Activity trail + guest notification (after commit; never blocks the response on failure)
+    const lines = items.map((i) => {
+        const name = menuById.get(i.id)?.name || "Item";
+        return { name, quantity: i.quantity, price: i.price };
+    });
+    const summary = lines.map((l) => `${l.quantity} × ${l.name}`).join(", ");
+    if (addedBy) {
+        notificationService.notifyItemsAddedByStaff({
+            tableSessionId,
+            orderId: result.id,
+            addedBy: { name: addedBy.name, role: addedBy.role },
+            items: lines,
+            totalAmount: result.totalAmount,
+        });
+        logSessionEventAsync({
+            tableSessionId,
+            type: "STAFF_ADDED_ITEMS",
+            actor: "STAFF",
+            actorName: `${addedBy.name} (${addedBy.role.toLowerCase()})`,
+            message: `Added ${summary} to the order`,
+            data: { items: lines, orderTotal: result.totalAmount },
+        });
+    } else {
+        logSessionEventAsync({
+            tableSessionId,
+            type: "ORDER_PLACED",
+            actor: "GUEST",
+            message: `Ordered ${summary}`,
+            data: { items: lines, orderTotal: result.totalAmount },
+        });
+    }
 
     return result;
 };
@@ -546,7 +608,7 @@ export const updateOrderItems = async (orderId: string, itemStatuses: { itemId: 
  * Complete order and close table session (Simple payment flow)
  */
 export const completeOrderAndCloseSession = async (orderId: string) => {
-    return await prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx) => {
         // 1. Get the order
         const order = await tx.order.findUnique({
             where: { id: orderId },
@@ -572,6 +634,10 @@ export const completeOrderAndCloseSession = async (orderId: string) => {
             });
         }
 
+        if (order.tableSessionId) {
+            await redisService.del(`order:session:${order.tableSessionId}`);
+        }
+
         // 4. Notify real-time update
         notificationService.notifyOrderStatusChange({
             orderId: order.id,
@@ -579,6 +645,11 @@ export const completeOrderAndCloseSession = async (orderId: string) => {
             status: "COMPLETED"
         });
 
-        return { success: true, message: "Order completed and session closed" };
+        return { success: true, message: "Order completed and session closed", tableSessionId: order.tableSessionId };
     });
+
+    if (outcome.tableSessionId) {
+        await finalizeClosedSession({ tableSessionId: outcome.tableSessionId, reason: "CLOSED_BY_STAFF" });
+    }
+    return { success: outcome.success, message: outcome.message };
 };

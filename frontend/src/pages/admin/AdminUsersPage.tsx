@@ -4,6 +4,7 @@ import { User, Role } from '../../types/user.types';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { DataTable, SearchInput, SelectFilter, Pagination, Column, SortConfig } from '../../components/common';
 import { UserFormModal } from '../../components/admin/UserFormModal';
+import { LOCALE } from '../../utils/formatCurrency';
 
 const AdminUsersPage = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -141,7 +142,7 @@ const AdminUsersPage = () => {
       sortable: true,
       render: (user) => (
         <span className="text-sm text-gray-500">
-          {new Date(user.createdAt).toLocaleDateString('vi-VN')}
+          {new Date(user.createdAt).toLocaleDateString(LOCALE)}
         </span>
       ),
     },

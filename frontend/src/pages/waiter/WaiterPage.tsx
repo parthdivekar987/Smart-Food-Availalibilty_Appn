@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import axiosClient from '../../api/axiosClient';
+import axiosClient, { getApiErrorMessage } from '../../api/axiosClient';
+import { paymentApi } from '../../api/paymentApi';
+import StaffAddItemsModal from '../../components/staff/StaffAddItemsModal';
 import { waiterApi } from '../../api/waiterApi';
 import { orderApi } from '../../api/orderApi';
 import { useSocketStore } from '../../store/useSocketStore';
 import { toast } from 'react-hot-toast';
-import BillModal from '../../components/waiter/BillModal';
+import BillModal, { PaymentData } from '../../components/waiter/BillModal';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 // Order Data Type
 interface OrderItem {
@@ -23,6 +26,7 @@ interface Order {
   totalAmount: number;
   createdAt: string;
   billRequested?: boolean;
+  tableSessionId: string;
   tableSession: {
     table: { name: string };
     waiter?: {
@@ -44,6 +48,7 @@ export default function WaiterPage() {
   const [selectedItems, setSelectedItems] = useState<Record<string, boolean>>({});
   // Bill Modal
   const [billOrder, setBillOrder] = useState<Order | null>(null);
+  const [addItemsFor, setAddItemsFor] = useState<{ sessionId: string; tableName: string } | null>(null);
 
   const socket = useSocketStore(state => state.socket);
   const joinRoom = useSocketStore(state => state.joinRoom);
@@ -152,21 +157,15 @@ export default function WaiterPage() {
     setBillOrder(order);
   };
 
-  // Confirm Payment - Simple flow: Complete order and close session
-  const handleConfirmPayment = async (orderId: string, paymentData: {
-    paymentMethod: 'CASH' | 'CARD' | 'MOMO' | 'ZALOPAY' | 'VNPAY';
-    discountAmount: number;
-    discountType: 'PERCENTAGE' | 'FIXED' | null;
-    finalAmount: number;
-  }) => {
+  // Confirm Payment: records the payment (method, discount, final amount), completes the order and frees the table
+  const handleConfirmPayment = async (orderId: string, paymentData: PaymentData) => {
     try {
-      // Simple flow: Just mark order as completed and close session
-      await axiosClient.post(`/orders/${orderId}/complete`);
-      toast.success(`Payment confirmed (${paymentData.paymentMethod})! Table is now ready for new guests. 🎉`);
+      await paymentApi.confirmPayment({ orderId, ...paymentData });
+      toast.success(`Payment recorded (${paymentData.paymentMethod}). Table is ready for new guests.`);
       setBillOrder(null);
       fetchOrders();
     } catch (error) {
-      toast.error("Failed to process payment");
+      toast.error(getApiErrorMessage(error, "Failed to record payment"));
     }
   };
 
@@ -345,7 +344,7 @@ export default function WaiterPage() {
                   <div className="text-right">
                     <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-[11px] font-black">x{item.quantity}</span>
                     {activeTab === 'BILLING' && (
-                      <p className="text-xs text-gray-500 mt-1">{(item.price * item.quantity).toLocaleString('vi-VN')}đ</p>
+                      <p className="text-xs text-gray-500 mt-1">{formatCurrency((item.price * item.quantity))}</p>
                     )}
                   </div>
                 </div>
@@ -356,7 +355,7 @@ export default function WaiterPage() {
             {activeTab === 'BILLING' && (
               <div className="px-4 py-2 bg-gray-50 border-t border-dashed flex justify-between items-center">
                 <span className="font-bold text-gray-600">Total</span>
-                <span className="text-lg font-black text-gray-900">{order.totalAmount.toLocaleString('vi-VN')}đ</span>
+                <span className="text-lg font-black text-gray-900">{formatCurrency(order.totalAmount)}</span>
               </div>
             )}
 
@@ -388,7 +387,15 @@ export default function WaiterPage() {
               </div>
             )}
 
-            <div className="p-4 bg-gray-50/50 flex gap-3 border-t">
+            <div className="px-4 pt-3 bg-gray-50/50 border-t">
+              <button
+                onClick={() => setAddItemsFor({ sessionId: order.tableSessionId, tableName: order.tableSession.table.name })}
+                className="w-full py-2 rounded-xl border border-dashed border-amber-300 text-amber-700 text-xs font-bold hover:bg-amber-50 transition-colors"
+              >
+                + Add items for this table
+              </button>
+            </div>
+            <div className="p-4 bg-gray-50/50 flex gap-3">
               {activeTab === 'NEW' && (
                 <>
                   <button
@@ -427,6 +434,15 @@ export default function WaiterPage() {
           </div>
         ))}
       </div>
+
+      {addItemsFor && (
+        <StaffAddItemsModal
+          sessionId={addItemsFor.sessionId}
+          tableName={addItemsFor.tableName}
+          onClose={() => setAddItemsFor(null)}
+          onAdded={fetchOrders}
+        />
+      )}
 
       {/* Bill Modal */}
       {billOrder && (

@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 
 const ACCESS_TOKEN_SECRET = process.env.JWT_SECRET || "your-default";
 const REFRESH_TOKEN_SECRET =
-  process.env.JWT_REFRESH_SECRET || "your-refresh-default";
+  process.env.JWT_REFRESH_SECRET || process.env.REFRESH_SECRET_KEY || "your-refresh-default";
 export const generateAccessToken = (userId: string, role: string) => {
   return jwt.sign({ userId, role }, ACCESS_TOKEN_SECRET, { expiresIn: "15m" });
 };

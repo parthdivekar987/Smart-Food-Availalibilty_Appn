@@ -2,6 +2,7 @@ import React from 'react';
 import { MenuItem } from '../../types';
 import { X, Tag, Info, ChefHat, DollarSign, Layers } from 'lucide-react';
 import { getPhotoUrl } from '../../utils/photoUrl';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 interface MenuItemDetailProps {
   item: MenuItem;
@@ -54,7 +55,7 @@ export default function MenuItemDetail({ item }: MenuItemDetailProps) {
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                    <h3 className="text-xl font-bold text-orange-600">
-                       {item.price.toLocaleString()}đ
+                       {formatCurrency(item.price)}
                    </h3>
                    {item.isChefRecommended && (
                        <span className="flex items-center gap-1 text-xs font-medium bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">
@@ -105,7 +106,7 @@ export default function MenuItemDetail({ item }: MenuItemDetailProps) {
                              {group.options.map(opt => (
                                  <div key={opt.id} className="flex justify-between text-sm py-1 border-b border-dashed border-gray-100 last:border-0">
                                      <span className="text-gray-600">{opt.name}</span>
-                                     <span className="font-medium text-gray-900">+{opt.priceDelta.toLocaleString()}đ</span>
+                                     <span className="font-medium text-gray-900">+{formatCurrency(opt.priceDelta)}</span>
                                  </div>
                              ))}
                              {group.options.length === 0 && <span className="text-xs text-gray-400 italic">Trống</span>}
